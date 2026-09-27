@@ -81,7 +81,7 @@
     <header class="flex items-center justify-between py-3 mb-5 border-b border-appleSeparator/40">
       <div>
         <h1 class="text-2xl font-bold tracking-tight text-gray-900">MangaVocab</h1>
-        <p class="text-xs text-appleSecondaryText font-medium">英語漫画で出会ったボキャブラリーを記録・暗記学習 (Gemini連携)</p>
+        <p class="text-xs text-appleSecondaryText font-medium">英語漫画ボキャブラリー記録・暗記学習</p>
       </div>
 
       <div>
@@ -150,10 +150,10 @@
 
       <!-- STEP 2: 作品詳細 & 単語暗記カードビュー -->
       <section v-else class="space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm">
           <div class="flex items-center gap-3">
             <button 
-              @click="selectedManga = ''" 
+              @click="selectedManga = ''; currentMode = 'view';" 
               class="min-h-[44px] min-w-[44px] px-3 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-semibold text-xs rounded-xl transition flex items-center gap-1"
               aria-label="作品一覧へ戻る">
               <i data-lucide="arrow-left" class="w-4 h-4"></i> 作品一覧
@@ -165,12 +165,39 @@
                   {{ filteredItems.length }} 語
                 </span>
               </div>
-              <p class="text-[11px] text-appleSecondaryText">カードをタップすると【英語 ⇄ 日本語訳】が反転します</p>
+              <p class="text-[11px] text-appleSecondaryText">
+                <span v-if="currentMode === 'view'">カードタップで反転 (英 ⇄ 日)</span>
+                <span v-else-if="currentMode === 'edit'" class="text-amber-600 font-bold">カードをタップして編集</span>
+                <span v-else-if="currentMode === 'delete'" class="text-red-600 font-bold">カードをタップして削除</span>
+              </p>
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
-            <div class="relative flex-1 sm:w-56">
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- モード切替 -->
+            <div class="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+              <button 
+                @click="currentMode = 'view'" 
+                :class="currentMode === 'view' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'"
+                class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i> 通常
+              </button>
+              <button 
+                @click="currentMode = 'edit'" 
+                :class="currentMode === 'edit' ? 'bg-amber-500 text-white shadow-xs' : 'text-gray-500 hover:text-amber-600'"
+                class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                <i data-lucide="pencil" class="w-3.5 h-3.5"></i> 編集
+              </button>
+              <button 
+                @click="currentMode = 'delete'" 
+                :class="currentMode === 'delete' ? 'bg-red-500 text-white shadow-xs' : 'text-gray-500 hover:text-red-600'"
+                class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 削除
+              </button>
+            </div>
+
+            <!-- 検索 -->
+            <div class="relative flex-1 sm:w-48">
               <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-appleSecondaryText"></i>
               <input 
                 v-model="searchQuery" 
@@ -179,12 +206,6 @@
                 class="w-full pl-9 pr-3 py-2 bg-appleBg border border-appleSeparator/40 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]"
               />
             </div>
-            <select 
-              v-model="selectedChapter" 
-              class="bg-appleBg border border-appleSeparator/40 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]">
-              <option value="">全話数</option>
-              <option v-for="ch in chapterList" :key="ch" :value="ch">{{ ch }}</option>
-            </select>
           </div>
         </div>
 
@@ -198,105 +219,76 @@
           <div 
             v-for="item in filteredItems" 
             :key="item.id" 
-            class="perspective-1000 min-h-[175px] cursor-pointer"
+            class="perspective-1000 min-h-[160px] cursor-pointer"
             @mouseenter="prefetchDictDetail(item.term)"
             @touchstart="prefetchDictDetail(item.term)"
-            @click="toggleCardFlip(item.id)">
+            @click="handleCardClick(item)">
             
             <div 
               class="relative w-full h-full duration-500 transform-style-preserve-3d transition-transform rounded-2xl"
-              :class="{ 'rotate-y-180': flippedCards[item.id] }">
+              :class="{ 
+                'rotate-y-180': flippedCards[item.id] && currentMode === 'view',
+                'ring-2 ring-amber-400': currentMode === 'edit',
+                'ring-2 ring-red-400': currentMode === 'delete'
+              }">
               
               <!-- 表面：英語 -->
-              <div class="absolute inset-0 w-full h-full bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+              <div class="absolute inset-0 w-full h-full bg-appleCard p-5 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
                 <div>
                   <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-full">表面 : 英語</span>
+                    <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full">英語</span>
                     
-                    <div class="flex items-center gap-1.5" @click.stop>
-                      <button 
-                        @click="openDictDetailModal(item.term)" 
-                        @mouseenter.stop="prefetchDictDetail(item.term)"
-                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-blue-50 text-appleBlue hover:bg-blue-100 active:scale-95 transition" 
-                        title="詳細辞書（発音記号・品詞・意味・例文）"
-                        aria-label="詳細辞書を見る">
-                        <i data-lucide="book-marked" class="w-4 h-4"></i>
-                      </button>
-                      <button 
-                        @click="openEditModal(item)" 
-                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:text-appleBlue hover:bg-blue-50 active:scale-95 transition" 
-                        title="編集"
-                        aria-label="単語を編集">
-                        <i data-lucide="pencil" class="w-4 h-4"></i>
-                      </button>
-                      <button 
-                        @click="confirmDeleteItem(item.id)" 
-                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition" 
-                        title="削除"
-                        aria-label="単語を削除">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                      </button>
-                    </div>
+                    <span v-if="currentMode === 'edit'" class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <i data-lucide="pencil" class="w-3 h-3"></i> タップで編集
+                    </span>
+                    <span v-else-if="currentMode === 'delete'" class="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <i data-lucide="trash-2" class="w-3 h-3"></i> タップで削除
+                    </span>
                   </div>
 
-                  <h3 class="text-xl font-bold text-gray-900 tracking-wide">{{ item.term }}</h3>
-                  <div class="flex items-center gap-2 mt-1">
+                  <h3 class="text-xl font-bold text-gray-900 tracking-wide mt-1">{{ item.term }}</h3>
+                  
+                  <div class="flex items-center gap-2 mt-1.5" v-if="item.phonetic || item.partOfSpeech">
                     <span v-if="item.phonetic" class="text-xs text-appleSecondaryText font-mono">/{{ item.phonetic }}/</span>
-                    <span v-if="item.partOfSpeech" class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                    <span v-if="item.partOfSpeech" class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-medium">
                       {{ item.partOfSpeech }}
                     </span>
                   </div>
                 </div>
 
-                <div class="pt-3 border-t border-appleSeparator/20 flex items-center justify-between text-xs">
-                  <span v-if="item.chapter" class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[11px] font-medium">
-                    {{ item.chapter }}
-                  </span>
-                  <span v-else class="text-gray-400 text-[11px]">-</span>
-                  <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5 shrink-0">
-                    <i data-lucide="touch-3" class="w-3.5 h-3.5"></i> タップでめくる
+                <div class="pt-3 border-t border-appleSeparator/20 flex items-center justify-between text-xs text-appleSecondaryText">
+                  <button 
+                    v-if="currentMode === 'view'"
+                    @click.stop="openDictDetailModal(item.term)"
+                    class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
+                    <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 辞書詳細
+                  </button>
+                  <span v-else class="text-[11px] text-gray-400">選択待機中</span>
+
+                  <span v-if="currentMode === 'view'" class="text-[11px] flex items-center gap-0.5">
+                    <i data-lucide="touch-3" class="w-3.5 h-3.5"></i> 反転
                   </span>
                 </div>
               </div>
 
               <!-- 裏面：日本語訳 -->
-              <div class="absolute inset-0 w-full h-full bg-blue-50/80 p-4 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
+              <div class="absolute inset-0 w-full h-full bg-blue-50/90 p-5 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
                 <div>
                   <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2.5 py-1 rounded-full">裏面 : 日本語訳</span>
-                    
-                    <div class="flex items-center gap-1.5" @click.stop>
-                      <button 
-                        @click="openDictDetailModal(item.term)" 
-                        @mouseenter.stop="prefetchDictDetail(item.term)"
-                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white/80 text-appleBlue hover:bg-white active:scale-95 transition shadow-xs" 
-                        title="詳細辞書（発音記号・品詞・意味・例文）"
-                        aria-label="詳細辞書を見る">
-                        <i data-lucide="book-marked" class="w-4 h-4"></i>
-                      </button>
-                      <button 
-                        @click="openEditModal(item)" 
-                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white/80 text-gray-600 hover:text-appleBlue active:scale-95 transition shadow-xs"
-                        title="編集"
-                        aria-label="単語を編集">
-                        <i data-lucide="pencil" class="w-4 h-4"></i>
-                      </button>
-                      <button 
-                        @click="confirmDeleteItem(item.id)" 
-                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-red-100 text-red-600 hover:bg-red-200 active:scale-95 transition shadow-xs"
-                        title="削除"
-                        aria-label="単語を削除">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                      </button>
-                    </div>
+                    <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded-full">日本語訳</span>
                   </div>
 
-                  <p class="text-base font-bold text-gray-900 mt-2">{{ item.definition }}</p>
+                  <p class="text-base font-bold text-gray-900 mt-2 leading-snug">{{ item.definition }}</p>
                 </div>
 
                 <div class="pt-3 border-t border-blue-200/60 flex items-center justify-between text-xs">
-                  <span class="text-xs text-gray-600 truncate font-medium">{{ item.term }}</span>
-                  <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5 shrink-0">
+                  <button 
+                    v-if="currentMode === 'view'"
+                    @click.stop="openDictDetailModal(item.term)"
+                    class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
+                    <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 辞書詳細
+                  </button>
+                  <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5">
                     <i data-lucide="undo" class="w-3.5 h-3.5"></i> 戻す
                   </span>
                 </div>
@@ -355,7 +347,7 @@
                 AI取得
               </button>
             </div>
-            <p class="text-[11px] text-appleSecondaryText mt-1">※ フォーカスを外すか「AI取得」を押すとGeminiが自動補完します。</p>
+            <p class="text-[11px] text-appleSecondaryText mt-1">※ 入力後にフォーカスを外すか「AI取得」を押すとGeminiが自動入力します。</p>
           </div>
 
           <div v-if="isLoadingDict" class="bg-gray-50 border border-appleSeparator/20 rounded-xl p-3 space-y-2 animate-skeleton">
@@ -369,18 +361,7 @@
               v-model.trim="vocabForm.definition" 
               @keydown="handleFormKeydown"
               type="text" 
-              placeholder="例: 激怒する、カンカンに怒る (Shift + Enter で即保存)" 
-              class="w-full px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px]"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-gray-700 mb-1">話数 / チャプター</label>
-            <input 
-              v-model.trim="vocabForm.chapter" 
-              @keydown="handleFormKeydown"
-              type="text" 
-              placeholder="例: Ch.1054" 
+              placeholder="例: 激怒する、カンカンに怒る (Shift + Enter で保存)" 
               class="w-full px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px]"
             />
           </div>
@@ -480,7 +461,7 @@
         <div class="px-5 py-4 border-b border-appleSeparator/30 flex justify-between items-center bg-appleBg/50">
           <div class="flex items-center gap-2">
             <i data-lucide="book-marked" class="w-5 h-5 text-appleBlue"></i>
-            <h3 class="text-base font-bold text-gray-900">詳細辞書 (Gemini AI)</h3>
+            <h3 class="text-base font-bold text-gray-900">詳細辞書 (Gemini 3.8 Flash)</h3>
           </div>
           <button 
             @click="closeDictDetailModal" 
@@ -554,7 +535,7 @@
     </div>
 
     <footer class="mt-auto pt-6 pb-2 text-center">
-      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.0.0 • MangaVocab powered by Gemini</span>
+      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.2.1 • MangaVocab</span>
     </footer>
 
   </div>
@@ -562,29 +543,49 @@
   <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
-    // Gemini API設定
     const GEMINI_API_KEY = 'AQ.Ab8RN6JP3NwtB-_RrWGqa5EkRGLGYmkikBqGCPeRhr4vkQeiVg';
-    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const PRIMARY_MODEL = 'gemini-3.8-flash';
+    const FALLBACK_MODEL = 'gemini-2.5-flash';
 
     const DB_NAME = 'MangaVocabDB';
     const DB_VERSION = 2;
     const STORE_VOCAB = 'vocabularies';
     const STORE_MANGA = 'manga_titles';
 
-    function initIndexedDB() {
-      return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = (e) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains(STORE_VOCAB)) {
-            db.createObjectStore(STORE_VOCAB, { keyPath: 'id', autoIncrement: true });
+    let isIndexedDBSupported = true;
+    let dbInstance = null;
+
+    function initStorage() {
+      return new Promise((resolve) => {
+        try {
+          if (!window.indexedDB) {
+            isIndexedDBSupported = false;
+            return resolve(false);
           }
-          if (!db.objectStoreNames.contains(STORE_MANGA)) {
-            db.createObjectStore(STORE_MANGA, { keyPath: 'id', autoIncrement: true });
-          }
-        };
-        req.onsuccess = (e) => resolve(e.target.result);
-        req.onerror = (e) => reject(e.target.error);
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_VOCAB)) {
+              db.createObjectStore(STORE_VOCAB, { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains(STORE_MANGA)) {
+              db.createObjectStore(STORE_MANGA, { keyPath: 'id', autoIncrement: true });
+            }
+          };
+          req.onsuccess = (e) => {
+            dbInstance = e.target.result;
+            isIndexedDBSupported = true;
+            resolve(true);
+          };
+          req.onerror = () => {
+            console.warn('IndexedDB blocked or unavailable, falling back to LocalStorage.');
+            isIndexedDBSupported = false;
+            resolve(false);
+          };
+        } catch (e) {
+          isIndexedDBSupported = false;
+          resolve(false);
+        }
       });
     }
 
@@ -594,8 +595,9 @@
         const items = ref([]);
         const mangaRecords = ref([]);
         const searchQuery = ref('');
-        const selectedChapter = ref('');
         const flippedCards = ref({});
+
+        const currentMode = ref('view');
 
         const isModalOpen = ref(false);
         const isEditing = ref(false);
@@ -623,7 +625,6 @@
           phonetic: '',
           partOfSpeech: '',
           mangaTitle: '',
-          chapter: '',
           updatedAt: null
         });
 
@@ -633,11 +634,9 @@
           genre: 'action'
         });
 
-        let dbInstance = null;
-
         const selectManga = (title) => {
           selectedManga.value = title;
-          selectedChapter.value = '';
+          currentMode.value = 'view';
           searchQuery.value = '';
           refreshIcons();
           preloadVisibleDictDetails();
@@ -648,64 +647,113 @@
           return found || genreOptions[0];
         };
 
-        const loadAllDataFromDB = async () => {
-          if (!dbInstance) return;
-          
-          const txVocab = dbInstance.transaction([STORE_VOCAB], 'readonly');
-          const storeVocab = txVocab.objectStore(STORE_VOCAB);
-          const reqVocab = storeVocab.getAll();
-          reqVocab.onsuccess = () => {
-            items.value = (reqVocab.result || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-            refreshIcons();
-            preloadVisibleDictDetails();
-          };
+        const loadAllData = async () => {
+          if (isIndexedDBSupported && dbInstance) {
+            try {
+              const txVocab = dbInstance.transaction([STORE_VOCAB], 'readonly');
+              const storeVocab = txVocab.objectStore(STORE_VOCAB);
+              const reqVocab = storeVocab.getAll();
+              reqVocab.onsuccess = () => {
+                items.value = (reqVocab.result || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                refreshIcons();
+                preloadVisibleDictDetails();
+              };
 
-          const txManga = dbInstance.transaction([STORE_MANGA], 'readonly');
-          const storeManga = txManga.objectStore(STORE_MANGA);
-          const reqManga = storeManga.getAll();
-          reqManga.onsuccess = () => {
-            mangaRecords.value = reqManga.result || [];
+              const txManga = dbInstance.transaction([STORE_MANGA], 'readonly');
+              const storeManga = txManga.objectStore(STORE_MANGA);
+              const reqManga = storeManga.getAll();
+              reqManga.onsuccess = () => {
+                mangaRecords.value = reqManga.result || [];
+                refreshIcons();
+              };
+              return;
+            } catch (e) {
+              console.warn('IDB read failed, checking LocalStorage fallback.');
+            }
+          }
+
+          try {
+            const rawVocab = localStorage.getItem(STORE_VOCAB);
+            items.value = rawVocab ? JSON.parse(rawVocab) : [];
+            const rawManga = localStorage.getItem(STORE_MANGA);
+            mangaRecords.value = rawManga ? JSON.parse(rawManga) : [];
             refreshIcons();
-          };
+          } catch (e) {
+            console.error('Storage access failed completely:', e);
+          }
         };
 
         const persistVocab = (record) => {
           return new Promise((resolve, reject) => {
-            const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
-            const store = tx.objectStore(STORE_VOCAB);
-            const req = store.put(record);
-            req.onsuccess = () => resolve();
-            req.onerror = (e) => reject(e.target.error);
+            if (isIndexedDBSupported && dbInstance) {
+              const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
+              const store = tx.objectStore(STORE_VOCAB);
+              const req = store.put(record);
+              req.onsuccess = () => resolve();
+              req.onerror = (e) => reject(e.target.error);
+            } else {
+              const current = [...items.value];
+              if (!record.id) {
+                record.id = Date.now();
+                current.unshift(record);
+              } else {
+                const idx = current.findIndex(i => i.id === record.id);
+                if (idx !== -1) current[idx] = record;
+                else current.unshift(record);
+              }
+              localStorage.setItem(STORE_VOCAB, JSON.stringify(current));
+              resolve();
+            }
           });
         };
 
-        const deleteVocabFromDB = (id) => {
+        const deleteVocab = (id) => {
           return new Promise((resolve, reject) => {
-            const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
-            const store = tx.objectStore(STORE_VOCAB);
-            const req = store.delete(id);
-            req.onsuccess = () => resolve();
-            req.onerror = (e) => reject(e.target.error);
+            if (isIndexedDBSupported && dbInstance) {
+              const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
+              const store = tx.objectStore(STORE_VOCAB);
+              const req = store.delete(id);
+              req.onsuccess = () => resolve();
+              req.onerror = (e) => reject(e.target.error);
+            } else {
+              const filtered = items.value.filter(i => i.id !== id);
+              localStorage.setItem(STORE_VOCAB, JSON.stringify(filtered));
+              resolve();
+            }
           });
         };
 
         const persistManga = (record) => {
           return new Promise((resolve, reject) => {
-            const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
-            const store = tx.objectStore(STORE_MANGA);
-            const req = store.put(record);
-            req.onsuccess = () => resolve();
-            req.onerror = (e) => reject(e.target.error);
+            if (isIndexedDBSupported && dbInstance) {
+              const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
+              const store = tx.objectStore(STORE_MANGA);
+              const req = store.put(record);
+              req.onsuccess = () => resolve();
+              req.onerror = (e) => reject(e.target.error);
+            } else {
+              const current = [...mangaRecords.value];
+              record.id = Date.now();
+              current.push(record);
+              localStorage.setItem(STORE_MANGA, JSON.stringify(current));
+              resolve();
+            }
           });
         };
 
-        const deleteMangaFromDB = (id) => {
+        const deleteManga = (id) => {
           return new Promise((resolve, reject) => {
-            const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
-            const store = tx.objectStore(STORE_MANGA);
-            const req = store.delete(id);
-            req.onsuccess = () => resolve();
-            req.onerror = (e) => reject(e.target.error);
+            if (isIndexedDBSupported && dbInstance) {
+              const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
+              const store = tx.objectStore(STORE_MANGA);
+              const req = store.delete(id);
+              req.onsuccess = () => resolve();
+              req.onerror = (e) => reject(e.target.error);
+            } else {
+              const filtered = mangaRecords.value.filter(m => m.id !== id);
+              localStorage.setItem(STORE_MANGA, JSON.stringify(filtered));
+              resolve();
+            }
           });
         };
 
@@ -717,17 +765,32 @@
           });
         };
 
-        const toggleCardFlip = (id) => {
-          flippedCards.value[id] = !flippedCards.value[id];
-          refreshIcons();
+        const handleCardClick = (item) => {
+          if (currentMode.value === 'view') {
+            flippedCards.value[item.id] = !flippedCards.value[item.id];
+            refreshIcons();
+          } else if (currentMode.value === 'edit') {
+            openEditModal(item);
+          } else if (currentMode.value === 'delete') {
+            confirmDeleteItem(item.id, item.term);
+          }
         };
 
-        /**
-         * Gemini API を直接呼び出して辞書・翻訳情報を取得
-         */
+        const callGeminiEndpoint = async (modelName, prompt) => {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+          return await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: "application/json" }
+            })
+          });
+        };
+
         const fetchFromGemini = async (term) => {
-          const prompt = `Analyze the English term or idiom "${term}" and provide dictionary information in pure JSON format (without markdown backticks).
-Return this exact structure:
+          const prompt = `Analyze the English term or idiom "${term}" and provide dictionary information in pure JSON format without markdown ticks.
+Format:
 {
   "word": "${term}",
   "phonetic": "IPA phonetic notation or empty string",
@@ -746,20 +809,12 @@ Return this exact structure:
   ]
 }`;
 
-          const res = await fetch(GEMINI_API_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              contents: [{
-                parts: [{ text: prompt }]
-              }],
-              generationConfig: {
-                responseMimeType: "application/json"
-              }
-            })
-          });
+          let res = await callGeminiEndpoint(PRIMARY_MODEL, prompt);
+
+          if (!res.ok && res.status === 404) {
+            console.warn(`${PRIMARY_MODEL} not found, trying ${FALLBACK_MODEL}`);
+            res = await callGeminiEndpoint(FALLBACK_MODEL, prompt);
+          }
 
           if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
@@ -774,9 +829,6 @@ Return this exact structure:
           return JSON.parse(cleaned);
         };
 
-        /**
-         * 単語入力時のGemini自動補完
-         */
         const handleAutoTranslate = async () => {
           const query = vocabForm.value.term.trim();
           if (!query) return;
@@ -793,15 +845,12 @@ Return this exact structure:
               dictCache.set(query.toLowerCase(), { success: true, data: result });
             }
           } catch (err) {
-            alert(`【Gemini連携エラー】辞書情報の取得に失敗しました。\n理由: ${err.message}\n手動で入力してください。`);
+            alert(`【Gemini連携エラー】\n${err.message}\n手動で入力してください。`);
           } finally {
             isLoadingDict.value = false;
           }
         };
 
-        /**
-         * 辞書データのプリフェッチ
-         */
         const prefetchDictDetail = async (term) => {
           const key = (term || '').trim().toLowerCase();
           if (!key || dictCache.has(key)) return;
@@ -830,9 +879,6 @@ Return this exact structure:
           });
         };
 
-        /**
-         * 詳細辞書モーダル起動
-         */
         const openDictDetailModal = async (term) => {
           const cleanTerm = (term || '').trim();
           if (!cleanTerm) return;
@@ -868,7 +914,7 @@ Return this exact structure:
           } catch (err) {
             dictDetailError.value = err.message;
             dictCache.set(key, { success: false, error: err.message });
-            alert(`【Gemini連携エラー】詳細取得に失敗しました。\n理由: ${err.message}`);
+            alert(`【Gemini連携エラー】\n理由: ${err.message}`);
           } finally {
             isLoadingDictDetail.value = false;
             refreshIcons();
@@ -891,7 +937,7 @@ Return this exact structure:
           };
           try {
             await persistManga(record);
-            await loadAllDataFromDB();
+            await loadAllData();
             closeMangaModal();
           } catch (err) {
             alert(`漫画タイトルの保存に失敗しました。\n理由: ${err.message}`);
@@ -901,8 +947,8 @@ Return this exact structure:
         const confirmDeleteManga = async (id, title) => {
           if (confirm(`作品「${title}」を削除しますか？\n（※登録済みの単語データは消去されません）`)) {
             try {
-              await deleteMangaFromDB(id);
-              await loadAllDataFromDB();
+              await deleteManga(id);
+              await loadAllData();
               if (selectedManga.value === title) {
                 selectedManga.value = '';
               }
@@ -921,7 +967,6 @@ Return this exact structure:
             phonetic: '',
             partOfSpeech: '',
             mangaTitle: selectedManga.value,
-            chapter: '',
             updatedAt: null
           };
           isModalOpen.value = true;
@@ -976,12 +1021,12 @@ Return this exact structure:
             return;
           }
 
+          // 構文エラーを修正した箇所
           const record = {
             ...vocabForm.value,
             term: vocabForm.value.term.trim(),
             definition: vocabForm.value.definition.trim(),
             mangaTitle: selectedManga.value,
-            chapter: vocabForm.value.chapter.trim(),
             updatedAt: Date.now()
           };
 
@@ -991,28 +1036,23 @@ Return this exact structure:
 
           try {
             await persistVocab(record);
-            await loadAllDataFromDB();
+            await loadAllData();
             closeModal();
           } catch (err) {
             alert(`単語の保存に失敗しました。\n理由: ${err.message}`);
           }
         };
 
-        const confirmDeleteItem = async (id) => {
-          if (confirm('この単語カードを削除してもよろしいですか？')) {
+        const confirmDeleteItem = async (id, term) => {
+          if (confirm(`単語「${term}」を削除してもよろしいですか？`)) {
             try {
-              await deleteVocabFromDB(id);
-              await loadAllDataFromDB();
+              await deleteVocab(id);
+              await loadAllData();
             } catch (err) {
               alert(`削除に失敗しました。\n理由: ${err.message}`);
             }
           }
         };
-
-        const chapterList = computed(() => {
-          const relevant = items.value.filter(i => i.mangaTitle === selectedManga.value);
-          return Array.from(new Set(relevant.map(i => i.chapter).filter(Boolean)));
-        });
 
         const countByManga = (mangaTitle) => {
           return items.value.filter(i => i.mangaTitle === mangaTitle).length;
@@ -1022,19 +1062,14 @@ Return this exact structure:
           if (!selectedManga.value) return [];
           return items.value.filter(item => {
             const matchManga = item.mangaTitle === selectedManga.value;
-            const matchChapter = !selectedChapter.value || item.chapter === selectedChapter.value;
             const q = searchQuery.value.toLowerCase();
-            return matchManga && matchChapter && (!q || item.term.toLowerCase().includes(q) || item.definition.toLowerCase().includes(q));
+            return matchManga && (!q || item.term.toLowerCase().includes(q) || item.definition.toLowerCase().includes(q));
           });
         });
 
         onMounted(async () => {
-          try {
-            dbInstance = await initIndexedDB();
-            await loadAllDataFromDB();
-          } catch (e) {
-            alert('IndexedDBの初期化に失敗しました。ブラウザ設定を確認してください。');
-          }
+          await initStorage();
+          await loadAllData();
           refreshIcons();
         });
 
@@ -1043,8 +1078,8 @@ Return this exact structure:
           items,
           mangaRecords,
           searchQuery,
-          selectedChapter,
           flippedCards,
+          currentMode,
           isModalOpen,
           isEditing,
           isLoadingDict,
@@ -1056,12 +1091,11 @@ Return this exact structure:
           vocabForm,
           isMangaModalOpen,
           newMangaForm,
-          chapterList,
           filteredItems,
           selectManga,
           getGenreInfo,
           countByManga,
-          toggleCardFlip,
+          handleCardClick,
           openAddModal,
           openEditModal,
           closeModal,
