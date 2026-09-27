@@ -5,62 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>MangaVocab - 英語漫画ボキャブラリー</title>
 
-  <!-- =========================================================
-       PWA Web App Manifest (Data URI形式による完全単一ファイル対応)
-       スマホで「ホーム画面に追加」した際にブラウザUIなしのスタンドアロンで起動します。
-       ========================================================= -->
+  <!-- PWA Web App Manifest -->
   <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22MangaVocab%22%2C%22short_name%22%3A%22MangaVocab%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23F2F2F7%22%2C%22theme_color%22%3A%22%23007AFF%22%7D" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-  <!-- Tailwind CSS (CDN) -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Apple Human Interface Guidelines (HIG) に準拠したシステムカラーパレット
     tailwind.config = {
       theme: {
         extend: {
           colors: {
             appleBlue: '#007AFF',
-            appleBg: '#F2F2F7',           // iOS標準システム背景色（ライトモード）
-            appleCard: '#FFFFFF',         // カード背景色
-            appleSeparator: '#C6C6C8',    // 境界線カラー
-            appleSecondaryText: '#8E8E93',// 補助テキストカラー
+            appleBg: '#F2F2F7',
+            appleCard: '#FFFFFF',
+            appleSeparator: '#C6C6C8',
+            appleSecondaryText: '#8E8E93',
           }
         }
       }
     };
   </script>
 
-  <!-- Vue.js 3 (CDN: ビルド不要なリアクティブUI) -->
+  <!-- Vue.js 3 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <!-- Lucide Icons (CDN: クリーンで軽量なアイコンセット) -->
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    /* =========================================================
-       Apple HIG 準拠デザイン & モバイル操作性・セーフエリア設定
-       ========================================================= */
     body {
       background-color: #F2F2F7;
       color: #000000;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
-      /* iPhoneのノッチ・ダイナミックアイランド・ホームバー余白の保護 */
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
-      touch-action: manipulation; /* ダブルタップによる誤ズームを無効化 */
-      user-select: none;          /* アプリ特有の不用意な長押し選択を無効化 */
+      touch-action: manipulation;
+      user-select: none;
     }
 
-    /* フォーム要素では通常通りテキスト入力を許可 */
     input, textarea, select {
       user-select: text;
     }
 
-    /* 体感レイテンシ削減用スケルトンアニメーション */
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
@@ -69,7 +59,6 @@
       animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
 
-    /* 暗記カード反転（3Dフリップ）アニメーション */
     .perspective-1000 {
       perspective: 1000px;
     }
@@ -88,14 +77,13 @@
 <body class="min-h-screen flex flex-col">
   <div id="app" class="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-6 py-4">
 
-    <!-- ヘッダー（Apple HIG準拠のミニマル＆クリーンナビゲーション） -->
+    <!-- ヘッダー -->
     <header class="flex items-center justify-between py-3 mb-5 border-b border-appleSeparator/40">
       <div>
         <h1 class="text-2xl font-bold tracking-tight text-gray-900">MangaVocab</h1>
-        <p class="text-xs text-appleSecondaryText font-medium">英語漫画で出会ったボキャブラリーを記録・暗記学習</p>
+        <p class="text-xs text-appleSecondaryText font-medium">英語漫画で出会ったボキャブラリーを記録・暗記学習 (Gemini連携)</p>
       </div>
 
-      <!-- 右上アクションボタン（作品未選択時は作品登録、選択時は単語追加） -->
       <div>
         <button 
           v-if="!selectedManga"
@@ -112,26 +100,21 @@
       </div>
     </header>
 
-    <!-- =========================================================
-         1ページ構造：作品一覧 ⇄ 作品別単語・暗記カード画面
-         ========================================================= -->
     <main class="flex-1 flex flex-col">
 
-      <!-- STEP 1: 作品一覧ビュー（未選択時） -->
+      <!-- STEP 1: 作品一覧ビュー -->
       <section v-if="!selectedManga" class="space-y-4">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold text-gray-900">作品一覧</h2>
           <span class="text-xs text-appleSecondaryText">作品を選択して単語を暗記学習</span>
         </div>
 
-        <!-- 作品未登録時の空表示 -->
         <div v-if="mangaRecords.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
           <i data-lucide="library" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
           <p class="text-sm font-medium text-gray-800">登録された漫画がありません</p>
           <p class="text-xs text-appleSecondaryText mt-1">「作品を登録」ボタンから作品を追加してください</p>
         </div>
 
-        <!-- 作品グリッド（クリックで作品を選択し、紐づく単語一覧へ遷移） -->
         <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <div 
             v-for="manga in mangaRecords" 
@@ -139,7 +122,6 @@
             @click="selectManga(manga.title)"
             class="bg-appleCard rounded-2xl border border-appleSeparator/30 shadow-sm overflow-hidden flex flex-col justify-between group hover:shadow-md cursor-pointer transition-all active:scale-[0.98]">
             
-            <!-- 5つのジャンル識別アイコン表示エリア -->
             <div :class="['relative w-full aspect-[4/3] flex flex-col items-center justify-center transition-colors', getGenreInfo(manga.genre).bgClass]">
               <i :data-lucide="getGenreInfo(manga.genre).icon" :class="['w-10 h-10 mb-1.5', getGenreInfo(manga.genre).textClass]"></i>
               <span :class="['text-[11px] font-semibold tracking-wide', getGenreInfo(manga.genre).textClass]">
@@ -153,7 +135,6 @@
               
               <div class="mt-2 pt-2 border-t border-appleSeparator/20 flex items-center justify-between" @click.stop>
                 <span class="text-[11px] text-appleBlue font-medium flex items-center">開く <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i></span>
-                <!-- 作品削除ボタン（@click.stopで親カードのクリック発火を防止） -->
                 <button 
                   @click="confirmDeleteManga(manga.id, manga.title)" 
                   class="min-h-[44px] min-w-[44px] flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition active:scale-95" 
@@ -167,9 +148,8 @@
         </div>
       </section>
 
-      <!-- STEP 2: 作品詳細 ＆ 単語暗記カードビュー（作品選択時） -->
+      <!-- STEP 2: 作品詳細 & 単語暗記カードビュー -->
       <section v-else class="space-y-4">
-        <!-- ナビゲーションバー：作品一覧へ戻る & タイトル表示 -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm">
           <div class="flex items-center gap-3">
             <button 
@@ -189,7 +169,6 @@
             </div>
           </div>
 
-          <!-- 検索・話数フィルタ -->
           <div class="flex items-center gap-2">
             <div class="relative flex-1 sm:w-56">
               <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-appleSecondaryText"></i>
@@ -209,14 +188,12 @@
           </div>
         </div>
 
-        <!-- 単語未登録時 -->
         <div v-if="filteredItems.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
           <i data-lucide="book-open" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
           <p class="text-sm font-medium text-gray-800">登録された単語がありません</p>
           <p class="text-xs text-appleSecondaryText mt-1">右上の「単語を追加」からこの作品の表現を登録しましょう</p>
         </div>
 
-        <!-- 単語カード一覧（そのまま暗記カードとして機能） -->
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <div 
             v-for="item in filteredItems" 
@@ -230,15 +207,13 @@
               class="relative w-full h-full duration-500 transform-style-preserve-3d transition-transform rounded-2xl"
               :class="{ 'rotate-y-180': flippedCards[item.id] }">
               
-              <!-- 表面：英語 (English) -->
+              <!-- 表面：英語 -->
               <div class="absolute inset-0 w-full h-full bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
                 <div>
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-full">表面 : 英語</span>
                     
-                    <!-- アクションボタン群（詳細辞書・編集・削除）: @click.stop で反転動作を抑止 -->
                     <div class="flex items-center gap-1.5" @click.stop>
-                      <!-- 詳細辞書モーダル起動ボタン（プリフェッチ＋キャッシュによりゼロ遅延表示） -->
                       <button 
                         @click="openDictDetailModal(item.term)" 
                         @mouseenter.stop="prefetchDictDetail(item.term)"
@@ -284,14 +259,13 @@
                 </div>
               </div>
 
-              <!-- 裏面：日本語訳 (Japanese) -->
+              <!-- 裏面：日本語訳 -->
               <div class="absolute inset-0 w-full h-full bg-blue-50/80 p-4 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
                 <div>
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2.5 py-1 rounded-full">裏面 : 日本語訳</span>
                     
                     <div class="flex items-center gap-1.5" @click.stop>
-                      <!-- 裏面にも詳細辞書ボタンを配置 -->
                       <button 
                         @click="openDictDetailModal(item.term)" 
                         @mouseenter.stop="prefetchDictDetail(item.term)"
@@ -335,9 +309,7 @@
 
     </main>
 
-    <!-- =========================================================
-         MODAL 1: 単語登録 / 編集（外側クリックで閉じる対応）
-         ========================================================= -->
+    <!-- MODAL 1: 単語登録 / 編集 -->
     <div 
       v-if="isModalOpen" 
       @click.self="closeModal" 
@@ -357,7 +329,6 @@
         </div>
 
         <div class="p-5 space-y-4 overflow-y-auto">
-          <!-- 作品タイトル（選択中の作品が固定されるためプルダウン不要で直感的） -->
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-1">対象作品</label>
             <div class="px-3 py-2.5 bg-gray-100 rounded-xl text-sm font-semibold text-gray-800 border border-appleSeparator/30">
@@ -365,7 +336,6 @@
             </div>
           </div>
 
-          <!-- 単語入力 & 辞書自動取得 -->
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-1">英単語 / 熟語 *</label>
             <div class="flex gap-2">
@@ -380,21 +350,19 @@
                 type="button" 
                 @click="handleAutoTranslate" 
                 :disabled="isLoadingDict || !vocabForm.term"
-                class="min-h-[44px] px-3 bg-gray-100 hover:bg-gray-200 active:scale-95 disabled:opacity-50 text-gray-700 font-semibold text-xs rounded-xl transition flex items-center gap-1">
+                class="min-h-[44px] px-3 bg-blue-50 text-appleBlue hover:bg-blue-100 active:scale-95 disabled:opacity-50 font-semibold text-xs rounded-xl transition flex items-center gap-1">
                 <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                辞書取得
+                AI取得
               </button>
             </div>
-            <p class="text-[11px] text-appleSecondaryText mt-1">※ フォーカスを外すか「辞書取得」を押すと自動翻訳されます。</p>
+            <p class="text-[11px] text-appleSecondaryText mt-1">※ フォーカスを外すか「AI取得」を押すとGeminiが自動補完します。</p>
           </div>
 
-          <!-- 取得中スケルトンUI（体感レイテンシの緩和） -->
           <div v-if="isLoadingDict" class="bg-gray-50 border border-appleSeparator/20 rounded-xl p-3 space-y-2 animate-skeleton">
             <div class="h-3 bg-gray-200 rounded w-1/3"></div>
             <div class="h-3 bg-gray-200 rounded w-3/4"></div>
           </div>
 
-          <!-- 日本語訳（Shift + Enter送信ショートカット対応） -->
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-1">日本語訳・意味 *</label>
             <input 
@@ -406,7 +374,6 @@
             />
           </div>
 
-          <!-- 話数タグ -->
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-1">話数 / チャプター</label>
             <input 
@@ -436,9 +403,7 @@
       </div>
     </div>
 
-    <!-- =========================================================
-         MODAL 2: 漫画タイトルの追加（ジャンルアイコン選択式）
-         ========================================================= -->
+    <!-- MODAL 2: 漫画タイトルの追加 -->
     <div 
       v-if="isMangaModalOpen" 
       @click.self="closeMangaModal" 
@@ -456,7 +421,6 @@
         </div>
 
         <div class="p-5 space-y-4 overflow-y-auto">
-          <!-- タイトル入力（Shift + Enter送信ショートカット対応） -->
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-1">漫画のタイトル *</label>
             <input 
@@ -468,7 +432,6 @@
             />
           </div>
 
-          <!-- 5つのジャンルアイコン選択 -->
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-2">ジャンル識別アイコン *</label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -507,21 +470,17 @@
       </div>
     </div>
 
-    <!-- =========================================================
-         MODAL 3: Free Dictionary API 詳細辞書モーダル
-         単語の意味、品詞、例文、発音記号を詳細表示（音声機能削除・高速化）
-         ========================================================= -->
+    <!-- MODAL 3: Gemini API 詳細辞書モーダル -->
     <div 
       v-if="isDictDetailOpen" 
       @click.self="closeDictDetailModal" 
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       
       <div class="bg-appleCard w-full max-w-lg rounded-2xl shadow-2xl border border-appleSeparator/30 flex flex-col overflow-hidden max-h-[90vh]">
-        <!-- モーダルヘッダー -->
         <div class="px-5 py-4 border-b border-appleSeparator/30 flex justify-between items-center bg-appleBg/50">
           <div class="flex items-center gap-2">
             <i data-lucide="book-marked" class="w-5 h-5 text-appleBlue"></i>
-            <h3 class="text-base font-bold text-gray-900">詳細辞書</h3>
+            <h3 class="text-base font-bold text-gray-900">詳細辞書 (Gemini AI)</h3>
           </div>
           <button 
             @click="closeDictDetailModal" 
@@ -531,9 +490,7 @@
           </button>
         </div>
 
-        <!-- モーダル本体 -->
         <div class="p-5 space-y-4 overflow-y-auto">
-          <!-- 読み込み中スケルトンUI（キャッシュ未ヒット時の体感レイテンシ緩和） -->
           <div v-if="isLoadingDictDetail" class="space-y-4 animate-skeleton">
             <div class="h-6 bg-gray-200 rounded w-1/3"></div>
             <div class="h-4 bg-gray-200 rounded w-1/2"></div>
@@ -543,16 +500,13 @@
             </div>
           </div>
 
-          <!-- エラー・未該当表示 -->
           <div v-else-if="dictDetailError" class="p-6 text-center space-y-2">
             <i data-lucide="alert-circle" class="w-10 h-10 text-amber-500 mx-auto"></i>
             <p class="text-sm font-semibold text-gray-800">辞書データが見つかりませんでした</p>
             <p class="text-xs text-appleSecondaryText">{{ dictDetailError }}</p>
           </div>
 
-          <!-- 取得データ詳細表示（品詞・意味・例文・発音記号） -->
           <div v-else-if="dictDetailData" class="space-y-4">
-            <!-- 単語・発音記号 -->
             <div class="pb-3 border-b border-appleSeparator/20">
               <h4 class="text-2xl font-bold text-gray-900">{{ dictDetailData.word }}</h4>
               <span v-if="dictDetailData.phonetic" class="text-sm text-appleSecondaryText font-mono">
@@ -560,7 +514,6 @@
               </span>
             </div>
 
-            <!-- 品詞・意味・例文リスト -->
             <div class="space-y-4">
               <div 
                 v-for="(meaning, mIdx) in dictDetailData.meanings" 
@@ -572,14 +525,13 @@
                 
                 <ul class="space-y-2.5 text-xs">
                   <li 
-                    v-for="(def, dIdx) in meaning.definitions.slice(0, 3)" 
+                    v-for="(def, dIdx) in meaning.definitions" 
                     :key="dIdx" 
                     class="space-y-1">
                     <div class="text-gray-800 font-medium leading-relaxed">
                       <span class="text-appleSecondaryText font-bold mr-1">{{ dIdx + 1 }}.</span>
                       {{ def.definition }}
                     </div>
-                    <!-- 例文の表示（存在する場合） -->
                     <div v-if="def.example" class="text-appleSecondaryText italic bg-white p-2 rounded-lg border border-appleSeparator/20">
                       "{{ def.example }}"
                     </div>
@@ -590,7 +542,6 @@
           </div>
         </div>
 
-        <!-- モーダルフッター -->
         <div class="px-5 py-3 border-t border-appleSeparator/30 bg-appleBg/40 flex justify-end">
           <button 
             type="button" 
@@ -602,42 +553,32 @@
       </div>
     </div>
 
-    <!-- バージョン表示（Apple HIGに沿った控えめなフッター・機能更新に伴いインクリメント） -->
     <footer class="mt-auto pt-6 pb-2 text-center">
-      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v1.4.1 • MangaVocab Engine</span>
+      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.0.0 • MangaVocab powered by Gemini</span>
     </footer>
 
   </div>
 
   <script>
-    /**
-     * =========================================================================
-     * アプリケーション コアロジック (Vue 3 & IndexedDB)
-     * =========================================================================
-     */
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
-    // IndexedDBの設定定義
-    // 初学者向けメモ: 既存の保存データを絶対に破壊・消去しないよう同一のDB名とストア名を継承します
+    // Gemini API設定
+    const GEMINI_API_KEY = 'AQ.Ab8RN6JP3NwtB-_RrWGqa5EkRGLGYmkikBqGCPeRhr4vkQeiVg';
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
     const DB_NAME = 'MangaVocabDB';
     const DB_VERSION = 2;
-    const STORE_VOCAB = 'vocabularies'; // 単語保存用オブジェクトストア
-    const STORE_MANGA = 'manga_titles'; // 漫画作品保存用オブジェクトストア
+    const STORE_VOCAB = 'vocabularies';
+    const STORE_MANGA = 'manga_titles';
 
-    /**
-     * IndexedDBの初期化関数
-     * 初学者向けメモ: IndexedDBはブラウザ標準のデータベースで、リロードしてもデータが失われません。
-     */
     function initIndexedDB() {
       return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (e) => {
           const db = e.target.result;
-          // 単語ストア（既存データを消去せず保護）
           if (!db.objectStoreNames.contains(STORE_VOCAB)) {
             db.createObjectStore(STORE_VOCAB, { keyPath: 'id', autoIncrement: true });
           }
-          // 漫画ストア
           if (!db.objectStoreNames.contains(STORE_MANGA)) {
             db.createObjectStore(STORE_MANGA, { keyPath: 'id', autoIncrement: true });
           }
@@ -649,35 +590,24 @@
 
     createApp({
       setup() {
-        // 1ページ構造の導線管理: selectedMangaが空なら「作品一覧」、選択されていれば「単語一覧」を表示
         const selectedManga = ref('');
-
-        const items = ref([]);           // 登録された全単語データ
-        const mangaRecords = ref([]);    // 登録された全漫画作品データ
-        const searchQuery = ref('');     // 検索フィルター文字列
-        const selectedChapter = ref(''); // 話数フィルター
-        
-        // 暗記カード用：各単語カードのフリップ状態（表: 英語 / 裏: 日本語）をID単位で管理
+        const items = ref([]);
+        const mangaRecords = ref([]);
+        const searchQuery = ref('');
+        const selectedChapter = ref('');
         const flippedCards = ref({});
 
         const isModalOpen = ref(false);
         const isEditing = ref(false);
         const isLoadingDict = ref(false);
 
-        // 詳細辞書モーダル用のリアクティブ変数（ネイティブ音声機能は削除）
         const isDictDetailOpen = ref(false);
         const isLoadingDictDetail = ref(false);
         const dictDetailData = ref(null);
         const dictDetailError = ref('');
 
-        // =========================================================
-        // 技術的レイテンシ解決：辞書データキャッシュ機構 (In-Memory Cache)
-        // 初学者向けメモ: 一度取得したAPI結果やバックグラウンド先行取得した結果をここに保持し、
-        // タップ時の通信待ち時間を0ミリ秒にします。
-        // =========================================================
         const dictCache = new Map();
 
-        // 5つのジャンル定義（識別要素アイコン用）
         const genreOptions = [
           { id: 'action', label: 'バトル・アクション', desc: '冒険・ファンタジー・能力バトル', icon: 'flame', bgClass: 'bg-red-50 text-red-600', textClass: 'text-red-600' },
           { id: 'romance', label: '恋愛・ラブコメ', desc: '学園・青春・オフィスラブ', icon: 'heart', bgClass: 'bg-pink-50 text-pink-600', textClass: 'text-pink-600' },
@@ -686,7 +616,6 @@
           { id: 'sports', label: 'スポーツ・頭脳戦', desc: '部活・競技・デスゲーム', icon: 'trophy', bgClass: 'bg-emerald-50 text-emerald-600', textClass: 'text-emerald-600' }
         ];
 
-        // 単語フォームモデル
         const vocabForm = ref({
           id: null,
           term: '',
@@ -698,7 +627,6 @@
           updatedAt: null
         });
 
-        // 漫画タイトルフォームモデル
         const isMangaModalOpen = ref(false);
         const newMangaForm = ref({
           title: '',
@@ -707,45 +635,31 @@
 
         let dbInstance = null;
 
-        /**
-         * 作品選択処理（作品一覧からタイトルを選択して紐づく単語一覧へ遷移）
-         */
         const selectManga = (title) => {
           selectedManga.value = title;
           selectedChapter.value = '';
           searchQuery.value = '';
           refreshIcons();
-
-          // 技術的レイテンシ解決：作品を選択した瞬間に、その作品に紐づく単語をアイドル時間で自動先読み
           preloadVisibleDictDetails();
         };
 
-        /**
-         * ジャンルIDから表示情報（アイコン・色・ラベル）を取得
-         */
         const getGenreInfo = (genreId) => {
           const found = genreOptions.find(g => g.id === genreId);
           return found || genreOptions[0];
         };
 
-        /**
-         * IndexedDBから既存データを全件読み込み（リロード時にも永続化）
-         */
         const loadAllDataFromDB = async () => {
           if (!dbInstance) return;
           
-          // 単語ストアからの読み出し
           const txVocab = dbInstance.transaction([STORE_VOCAB], 'readonly');
           const storeVocab = txVocab.objectStore(STORE_VOCAB);
           const reqVocab = storeVocab.getAll();
           reqVocab.onsuccess = () => {
             items.value = (reqVocab.result || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             refreshIcons();
-            // データ取得完了後にも先読みを実行
             preloadVisibleDictDetails();
           };
 
-          // 漫画ストアからの読み出し
           const txManga = dbInstance.transaction([STORE_MANGA], 'readonly');
           const storeManga = txManga.objectStore(STORE_MANGA);
           const reqManga = storeManga.getAll();
@@ -755,7 +669,6 @@
           };
         };
 
-        // IndexedDB: 単語保存（Create / Update）
         const persistVocab = (record) => {
           return new Promise((resolve, reject) => {
             const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
@@ -766,7 +679,6 @@
           });
         };
 
-        // IndexedDB: 単語削除（Delete）
         const deleteVocabFromDB = (id) => {
           return new Promise((resolve, reject) => {
             const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
@@ -777,7 +689,6 @@
           });
         };
 
-        // IndexedDB: 漫画保存（Create / Update）
         const persistManga = (record) => {
           return new Promise((resolve, reject) => {
             const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
@@ -788,7 +699,6 @@
           });
         };
 
-        // IndexedDB: 漫画削除（Delete）
         const deleteMangaFromDB = (id) => {
           return new Promise((resolve, reject) => {
             const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
@@ -799,9 +709,6 @@
           });
         };
 
-        /**
-         * Lucideベクターアイコンの再評価・描画
-         */
         const refreshIcons = () => {
           nextTick(() => {
             if (window.lucide) {
@@ -810,16 +717,65 @@
           });
         };
 
-        /**
-         * 暗記カードの裏表フリップ切り替え
-         */
         const toggleCardFlip = (id) => {
           flippedCards.value[id] = !flippedCards.value[id];
           refreshIcons();
         };
 
         /**
-         * 外部辞書・翻訳APIによる自動翻訳（単語登録時）
+         * Gemini API を直接呼び出して辞書・翻訳情報を取得
+         */
+        const fetchFromGemini = async (term) => {
+          const prompt = `Analyze the English term or idiom "${term}" and provide dictionary information in pure JSON format (without markdown backticks).
+Return this exact structure:
+{
+  "word": "${term}",
+  "phonetic": "IPA phonetic notation or empty string",
+  "partOfSpeech": "primary part of speech in English like verb, noun, idiom, etc.",
+  "definition_ja": "natural Japanese translation/definition suitable for manga reading",
+  "meanings": [
+    {
+      "partOfSpeech": "part of speech",
+      "definitions": [
+        {
+          "definition": "English definition or Japanese meaning explanation",
+          "example": "example sentence using the term"
+        }
+      ]
+    }
+  ]
+}`;
+
+          const res = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{ text: prompt }]
+              }],
+              generationConfig: {
+                responseMimeType: "application/json"
+              }
+            })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData?.error?.message || `HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('Gemini APIから有効な応答を取得できませんでした。');
+
+          const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          return JSON.parse(cleaned);
+        };
+
+        /**
+         * 単語入力時のGemini自動補完
          */
         const handleAutoTranslate = async () => {
           const query = vocabForm.value.term.trim();
@@ -827,88 +783,55 @@
 
           isLoadingDict.value = true;
           try {
-            // 品詞・発音記号の取得
-            fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(query)}`)
-              .then(res => res.ok ? res.json() : null)
-              .then(dictData => {
-                if (dictData && dictData.length > 0) {
-                  const entry = dictData[0];
-                  vocabForm.value.phonetic = entry.phonetic || (entry.phonetics && entry.phonetics.find(p => p.text)?.text) || '';
-                  if (entry.meanings && entry.meanings.length > 0) {
-                    vocabForm.value.partOfSpeech = entry.meanings[0].partOfSpeech || '';
-                  }
-                  // 新規登録時にも詳細辞書キャッシュへ保存して即座に使い回す
-                  dictCache.set(query.toLowerCase(), { success: true, data: entry });
-                }
-              })
-              .catch(() => {});
-
-            // 日本語翻訳の取得
-            const transRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(query)}&langpair=en|ja`);
-            if (!transRes.ok) {
-              throw new Error(`HTTP Error: ${transRes.status}`);
-            }
-            const transData = await transRes.json();
-            if (transData?.responseData?.translatedText) {
+            const result = await fetchFromGemini(query);
+            if (result) {
+              vocabForm.value.phonetic = result.phonetic || '';
+              vocabForm.value.partOfSpeech = result.partOfSpeech || '';
               if (!vocabForm.value.definition) {
-                vocabForm.value.definition = transData.responseData.translatedText;
+                vocabForm.value.definition = result.definition_ja || '';
               }
+              dictCache.set(query.toLowerCase(), { success: true, data: result });
             }
           } catch (err) {
-            alert(`【通信エラー】自動翻訳の取得に失敗しました。\n理由: ${err.message}\n手動で日本語訳を入力してください。`);
+            alert(`【Gemini連携エラー】辞書情報の取得に失敗しました。\n理由: ${err.message}\n手動で入力してください。`);
           } finally {
             isLoadingDict.value = false;
           }
         };
 
         /**
-         * 技術的レイテンシ解決：辞書データのプリフェッチ（事前読み込み）関数
-         * 初学者向けメモ: ユーザーがカードにマウスを乗せた（hover）瞬間や画面表示時にバックグラウンドで先読みします。
+         * 辞書データのプリフェッチ
          */
         const prefetchDictDetail = async (term) => {
           const key = (term || '').trim().toLowerCase();
           if (!key || dictCache.has(key)) return;
 
           try {
-            const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(key)}`);
-            if (!res.ok) {
-              if (res.status === 404) {
-                dictCache.set(key, { success: false, error: '辞書に登録されていない単語または複合語です。' });
-                return;
-              }
-              return; // 一時的なネットワークエラーの場合はキャッシュせず次回へ
-            }
-            const data = await res.json();
-            if (data && data.length > 0) {
-              dictCache.set(key, { success: true, data: data[0] });
+            const data = await fetchFromGemini(key);
+            if (data) {
+              dictCache.set(key, { success: true, data });
             }
           } catch (e) {
-            // 先読み時のエラーはユーザーの操作を邪魔しないようコンソールのみ
             console.debug('Prefetch skipped:', e);
           }
         };
 
-        /**
-         * 技術的レイテンシ解決：画面に表示されている単語のアイドル時自動先読み
-         */
         const preloadVisibleDictDetails = () => {
           if (!selectedManga.value) return;
           const currentWords = items.value.filter(i => i.mangaTitle === selectedManga.value).slice(0, 10);
           
-          // requestIdleCallback を用いてブラウザの負荷が低い時に順次事前フェッチ
           const scheduleFetch = window.requestIdleCallback || ((cb) => setTimeout(cb, 200));
           scheduleFetch(() => {
             currentWords.forEach((item, index) => {
               setTimeout(() => {
                 prefetchDictDetail(item.term);
-              }, index * 150); // APIレートリミット対策として150ms間隔で先読み
+              }, index * 300);
             });
           });
         };
 
         /**
-         * Free Dictionary API 詳細辞書モーダル起動
-         * 初学者向けメモ: キャッシュが存在する場合はネットワーク通信を行わず即座に0msでモーダルを描画します。
+         * 詳細辞書モーダル起動
          */
         const openDictDetailModal = async (term) => {
           const cleanTerm = (term || '').trim();
@@ -919,7 +842,6 @@
           dictDetailError.value = '';
           dictDetailData.value = null;
 
-          // 1. キャッシュヒット判定（即時反映）
           if (dictCache.has(key)) {
             const cached = dictCache.get(key);
             if (cached.success) {
@@ -932,30 +854,21 @@
             return;
           }
 
-          // 2. キャッシュが存在しない場合はスケルトンを表示して取得
           isLoadingDictDetail.value = true;
           refreshIcons();
 
           try {
-            const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(cleanTerm)}`);
-            if (!res.ok) {
-              if (res.status === 404) {
-                throw new Error('辞書に登録されていない単語または複合語です。');
-              }
-              throw new Error(`HTTP Error: ${res.status}`);
-            }
-            const data = await res.json();
-            if (data && data.length > 0) {
-              const entry = data[0];
-              dictDetailData.value = entry;
-              dictCache.set(key, { success: true, data: entry });
+            const data = await fetchFromGemini(cleanTerm);
+            if (data) {
+              dictDetailData.value = data;
+              dictCache.set(key, { success: true, data });
             } else {
               throw new Error('辞書情報が見つかりませんでした。');
             }
           } catch (err) {
             dictDetailError.value = err.message;
             dictCache.set(key, { success: false, error: err.message });
-            alert(`【通信エラー】辞書詳細の取得に失敗しました。\n理由: ${err.message}`);
+            alert(`【Gemini連携エラー】詳細取得に失敗しました。\n理由: ${err.message}`);
           } finally {
             isLoadingDictDetail.value = false;
             refreshIcons();
@@ -966,9 +879,6 @@
           isDictDetailOpen.value = false;
         };
 
-        /**
-         * 漫画タイトルの新規保存
-         */
         const saveMangaRecord = async () => {
           if (!newMangaForm.value.title.trim()) {
             alert('漫画タイトルを入力してください。');
@@ -988,9 +898,6 @@
           }
         };
 
-        /**
-         * 漫画タイトルの削除 (CRUD: Delete)
-         */
         const confirmDeleteManga = async (id, title) => {
           if (confirm(`作品「${title}」を削除しますか？\n（※登録済みの単語データは消去されません）`)) {
             try {
@@ -1005,9 +912,6 @@
           }
         };
 
-        /**
-         * 単語モーダル操作
-         */
         const openAddModal = () => {
           isEditing.value = false;
           vocabForm.value = {
@@ -1016,7 +920,7 @@
             definition: '',
             phonetic: '',
             partOfSpeech: '',
-            mangaTitle: selectedManga.value, // 現在開いている作品名を自動セット
+            mangaTitle: selectedManga.value,
             chapter: '',
             updatedAt: null
           };
@@ -1048,9 +952,6 @@
           isMangaModalOpen.value = false;
         };
 
-        /**
-         * テキストフォームの誤送信防止：Shift + Enter による送信制御
-         */
         const handleFormKeydown = (e) => {
           if (e.key === 'Enter' && e.shiftKey) {
             e.preventDefault();
@@ -1065,9 +966,6 @@
           }
         };
 
-        /**
-         * 単語の保存 (CRUD: Create / Update)
-         */
         const saveVocab = async () => {
           if (!vocabForm.value.term.trim()) {
             alert('単語または熟語を入力してください。');
@@ -1100,9 +998,6 @@
           }
         };
 
-        /**
-         * 単語の削除 (CRUD: Delete)
-         */
         const confirmDeleteItem = async (id) => {
           if (confirm('この単語カードを削除してもよろしいですか？')) {
             try {
@@ -1114,32 +1009,25 @@
           }
         };
 
-        // 選択された漫画の話数リスト
         const chapterList = computed(() => {
           const relevant = items.value.filter(i => i.mangaTitle === selectedManga.value);
           return Array.from(new Set(relevant.map(i => i.chapter).filter(Boolean)));
         });
 
-        // 漫画ごとの登録単語数
         const countByManga = (mangaTitle) => {
           return items.value.filter(i => i.mangaTitle === mangaTitle).length;
         };
 
-        // 選択中の漫画に紐づく単語リスト（検索・話数フィルタ適用後）
         const filteredItems = computed(() => {
           if (!selectedManga.value) return [];
           return items.value.filter(item => {
             const matchManga = item.mangaTitle === selectedManga.value;
             const matchChapter = !selectedChapter.value || item.chapter === selectedChapter.value;
             const q = searchQuery.value.toLowerCase();
-            const matchQuery = !q || 
-              item.term.toLowerCase().includes(q) || 
-              item.definition.toLowerCase().includes(q);
-            return matchManga && matchChapter && matchQuery;
+            return matchManga && matchChapter && (!q || item.term.toLowerCase().includes(q) || item.definition.toLowerCase().includes(q));
           });
         });
 
-        // アプリ起動時のIndexedDB初期化
         onMounted(async () => {
           try {
             dbInstance = await initIndexedDB();
