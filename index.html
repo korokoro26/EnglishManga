@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>MangaVocab - 英語漫画ボキャブラリー</title>
+
+  <!-- =========================================================
+       PWA Web App Manifest (Data URI形式による完全単一ファイル対応)
+       スマホで「ホーム画面に追加」した際にスタンドアロンアプリとして起動
+       ========================================================= -->
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22MangaVocab%22%2C%22short_name%22%3A%22MangaVocab%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23F2F2F7%22%2C%22theme_color%22%3A%22%23007AFF%22%7D" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Apple HIGに即したシステムカラーパレット
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            appleBlue: '#007AFF',
+            appleBg: '#F2F2F7',
+            appleCard: '#FFFFFF',
+            appleSeparator: '#C6C6C8',
+            appleSecondaryText: '#8E8E93',
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Vue.js 3 (CDN: ビルド不要なリアクティブUI) -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Lucide Icons (CDN: 軽量ベクターアイコン) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Apple HIG 準拠デザイン & モバイル操作性・セーフエリア設定 */
+    body {
+      background-color: #F2F2F7;
+      color: #000000;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      /* iPhoneのノッチ・ホームバー等のセーフエリアを保護 */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      touch-action: manipulation; /* ダブルタップによる誤ズームを無効化 */
+      user-select: none;          /* アプリ特有の不用意な長押し選択を無効化 */
+    }
+
+    /* フォーム要素ではテキスト入力を許可 */
+    input, textarea, select {
+      user-select: text;
+    }
+
+    /* 体感レイテンシ削減用スケルトンアニメーション */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .animate-skeleton {
+      animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    /* 暗記カード反転（3Dフリップ）アニメーション */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .transform-style-preserve-3d {
+      transform-style: preserve-3d;
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <div id="app" class="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-6 py-4">
+
+    <!-- ヘッダー：HIGセグメントコントロール（単語リスト ⇄ 作品管理） -->
+    <header class="flex flex-col sm:flex-row sm:items-center justify-between py-3 mb-4 border-b border-appleSeparator/40 gap-3">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-gray-900">MangaVocab</h1>
+        <p class="text-xs text-appleSecondaryText font-medium">英語漫画で出会ったボキャブラリーを記録・暗記学習</p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- ページ切り替え（HIGセグメントスタイル） -->
+        <div class="bg-gray-200/80 p-1 rounded-xl flex items-center">
+          <button 
+            @click="currentPage = 'vocab'" 
+            :class="currentPage === 'vocab' ? 'bg-white text-gray-900 shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'"
+            class="px-4 py-1.5 rounded-lg text-xs transition-all min-h-[36px] flex items-center gap-1.5">
+            <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+            単語リスト
+          </button>
+          <button 
+            @click="currentPage = 'manga'" 
+            :class="currentPage === 'manga' ? 'bg-white text-gray-900 shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'"
+            class="px-4 py-1.5 rounded-lg text-xs transition-all min-h-[36px] flex items-center gap-1.5">
+            <i data-lucide="library" class="w-3.5 h-3.5"></i>
+            作品管理
+          </button>
+        </div>
+
+        <!-- 登録ボタン（各画面共通：タップ領域44px以上確保） -->
+        <button 
+          v-if="currentPage === 'vocab'"
+          @click="openAddModal" 
+          class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-4 py-2 bg-appleBlue text-white font-semibold text-sm rounded-full shadow-sm hover:opacity-90 active:scale-95 transition-all">
+          <i data-lucide="plus" class="w-4 h-4 mr-1"></i> 単語を追加
+        </button>
+        <button 
+          v-if="currentPage === 'manga'"
+          @click="openMangaModal" 
+          class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-4 py-2 bg-appleBlue text-white font-semibold text-sm rounded-full shadow-sm hover:opacity-90 active:scale-95 transition-all">
+          <i data-lucide="plus" class="w-4 h-4 mr-1"></i> 作品を登録
+        </button>
+      </div>
+    </header>
+
+    <!-- PAGE 1: 単語リスト（暗記フラッシュカード） -->
+    <div v-if="currentPage === 'vocab'" class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6">
+      
+      <!-- サイドバー：作品・話数フィルタ -->
+      <aside class="md:col-span-1 space-y-4">
+        <div class="bg-appleCard rounded-2xl p-4 shadow-sm border border-appleSeparator/30">
+          <h2 class="text-xs font-semibold text-appleSecondaryText uppercase tracking-wider mb-2">作品で絞り込み</h2>
+          <div class="space-y-1">
+            <button 
+              @click="selectedManga = ''" 
+              :class="selectedManga === '' ? 'bg-appleBlue text-white font-semibold' : 'text-gray-700 hover:bg-gray-100'"
+              class="w-full text-left px-3 py-2 rounded-xl text-sm transition-colors min-h-[44px] flex items-center justify-between">
+              <span>すべて表示</span>
+              <span class="text-xs opacity-75">{{ items.length }}</span>
+            </button>
+            <button 
+              v-for="manga in activeMangaTitles" 
+              :key="manga" 
+              @click="selectedManga = manga"
+              :class="selectedManga === manga ? 'bg-appleBlue text-white font-semibold' : 'text-gray-700 hover:bg-gray-100'"
+              class="w-full text-left px-3 py-2 rounded-xl text-sm transition-colors min-h-[44px] flex items-center justify-between truncate">
+              <span class="truncate">{{ manga }}</span>
+              <span class="text-xs opacity-75 ml-2">{{ countByManga(manga) }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-appleCard rounded-2xl p-4 shadow-sm border border-appleSeparator/30 text-xs text-appleSecondaryText">
+          <div class="flex items-center gap-1.5 text-gray-700 font-semibold mb-1">
+            <i data-lucide="flip-horizontal" class="w-4 h-4 text-appleBlue"></i> 暗記カード操作
+          </div>
+          カードをタップすると【英語 ⇄ 日本語】が反転します。
+        </div>
+      </aside>
+
+      <!-- メインエリア：暗記カード一覧 -->
+      <main class="md:col-span-3 flex flex-col space-y-4">
+        <!-- 検索・チャプター絞り込みバー -->
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-appleSecondaryText"></i>
+            <input 
+              v-model="searchQuery" 
+              type="text" 
+              placeholder="単語や日本語訳を検索..." 
+              class="w-full pl-10 pr-4 py-2.5 bg-appleCard border border-appleSeparator/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]"
+            />
+          </div>
+          <select 
+            v-model="selectedChapter" 
+            class="bg-appleCard border border-appleSeparator/30 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]">
+            <option value="">すべての話数</option>
+            <option v-for="ch in chapterList" :key="ch" :value="ch">{{ ch }}</option>
+          </select>
+        </div>
+
+        <!-- 空表示 -->
+        <div v-if="filteredItems.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
+          <i data-lucide="book-open" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
+          <p class="text-sm font-medium text-gray-800">登録された単語がありません</p>
+          <p class="text-xs text-appleSecondaryText mt-1">「単語を追加」から漫画の表現を登録しましょう</p>
+        </div>
+
+        <!-- カードグリッド -->
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div 
+            v-for="item in filteredItems" 
+            :key="item.id" 
+            class="perspective-1000 min-h-[175px] cursor-pointer"
+            @click="toggleCardFlip(item.id)">
+            
+            <div 
+              class="relative w-full h-full duration-500 transform-style-preserve-3d transition-transform rounded-2xl"
+              :class="{ 'rotate-y-180': flippedCards[item.id] }">
+              
+              <!-- 表（英語） -->
+              <div class="absolute inset-0 w-full h-full bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2.5 py-1 rounded-full">表面 : 英語</span>
+                    
+                    <!-- 編集・削除ボタン（@click.stop で反転動作の巻き込みを防止） -->
+                    <div class="flex items-center gap-1.5" @click.stop>
+                      <button 
+                        @click="openEditModal(item)" 
+                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:text-appleBlue hover:bg-blue-50 active:scale-95 transition" 
+                        title="編集"
+                        aria-label="単語を編集">
+                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                      </button>
+                      <button 
+                        @click="confirmDeleteItem(item.id)" 
+                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition" 
+                        title="削除"
+                        aria-label="単語を削除">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <h3 class="text-xl font-bold text-gray-900 tracking-wide">{{ item.term }}</h3>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span v-if="item.phonetic" class="text-xs text-appleSecondaryText font-mono">/{{ item.phonetic }}/</span>
+                    <span v-if="item.partOfSpeech" class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">
+                      {{ item.partOfSpeech }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="pt-3 border-t border-appleSeparator/20 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <span class="font-semibold text-gray-800 truncate">{{ item.mangaTitle }}</span>
+                    <span v-if="item.chapter" class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[11px]">
+                      {{ item.chapter }}
+                    </span>
+                  </div>
+                  <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5 shrink-0">
+                    <i data-lucide="touch-3" class="w-3.5 h-3.5"></i> タップでめくる
+                  </span>
+                </div>
+              </div>
+
+              <!-- 裏（日本語訳） -->
+              <div class="absolute inset-0 w-full h-full bg-blue-50/80 p-4 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2.5 py-1 rounded-full">裏面 : 日本語訳</span>
+                    
+                    <div class="flex items-center gap-1.5" @click.stop>
+                      <button 
+                        @click="openEditModal(item)" 
+                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white/80 text-gray-600 hover:text-appleBlue active:scale-95 transition shadow-xs"
+                        title="編集"
+                        aria-label="単語を編集">
+                        <i data-lucide="pencil" class="w-4 h-4"></i>
+                      </button>
+                      <button 
+                        @click="confirmDeleteItem(item.id)" 
+                        class="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-red-100 text-red-600 hover:bg-red-200 active:scale-95 transition shadow-xs"
+                        title="削除"
+                        aria-label="単語を削除">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="text-base font-bold text-gray-900 mt-2">{{ item.definition }}</p>
+                </div>
+
+                <div class="pt-3 border-t border-blue-200/60 flex items-center justify-between text-xs">
+                  <span class="text-xs text-gray-600 truncate font-medium">{{ item.term }}</span>
+                  <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5 shrink-0">
+                    <i data-lucide="undo" class="w-3.5 h-3.5"></i> 戻す
+                  </span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- PAGE 2: 作品管理（ジャンル別識別アイコン表示） -->
+    <div v-if="currentPage === 'manga'" class="flex-1 space-y-4">
+      <div>
+        <h2 class="text-lg font-bold text-gray-900">登録済み漫画タイトル</h2>
+        <p class="text-xs text-appleSecondaryText">作品を事前登録することで、単語追加時にリストから選ぶだけで入力可能になります。</p>
+      </div>
+
+      <!-- 作品なし -->
+      <div v-if="mangaRecords.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
+        <i data-lucide="library" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
+        <p class="text-sm font-medium text-gray-800">登録された漫画がありません</p>
+        <p class="text-xs text-appleSecondaryText mt-1">「作品を登録」ボタンから作品を登録してください</p>
+      </div>
+
+      <!-- 作品グリッド（表紙画像の代わりにジャンルアイコンを識別要素として表示） -->
+      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div 
+          v-for="manga in mangaRecords" 
+          :key="manga.id" 
+          class="bg-appleCard rounded-2xl border border-appleSeparator/30 shadow-sm overflow-hidden flex flex-col justify-between group hover:shadow-md transition-shadow">
+          
+          <!-- ジャンル識別アイコンエリア（5つのジャンルに応じた背景色とLucideアイコン） -->
+          <div :class="['relative w-full aspect-[4/3] flex flex-col items-center justify-center transition-colors', getGenreInfo(manga.genre).bgClass]">
+            <i :data-lucide="getGenreInfo(manga.genre).icon" :class="['w-10 h-10 mb-1.5', getGenreInfo(manga.genre).textClass]"></i>
+            <span :class="['text-[11px] font-semibold tracking-wide', getGenreInfo(manga.genre).textClass]">
+              {{ getGenreInfo(manga.genre).label }}
+            </span>
+          </div>
+
+          <div class="p-3">
+            <h3 class="text-sm font-bold text-gray-900 truncate" :title="manga.title">{{ manga.title }}</h3>
+            <p class="text-[11px] text-appleSecondaryText mt-0.5">{{ countByManga(manga.title) }} 語登録済</p>
+            <div class="mt-2 pt-2 border-t border-appleSeparator/20 flex justify-end">
+              <button 
+                @click="confirmDeleteManga(manga.id, manga.title)" 
+                class="min-h-[44px] min-w-[44px] flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition active:scale-95" 
+                title="漫画を削除"
+                aria-label="漫画を削除">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 1: 単語登録 / 編集（外側クリックで閉じる対応） -->
+    <div 
+      v-if="isModalOpen" 
+      @click.self="closeModal" 
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      
+      <div class="bg-appleCard w-full max-w-lg rounded-2xl shadow-2xl border border-appleSeparator/30 flex flex-col overflow-hidden max-h-[90vh]">
+        <div class="px-5 py-4 border-b border-appleSeparator/30 flex justify-between items-center bg-appleBg/50">
+          <h3 class="text-base font-bold text-gray-900">
+            {{ isEditing ? 'ボキャブラリーを編集' : '新しいボキャブラリーを登録' }}
+          </h3>
+          <button 
+            @click="closeModal" 
+            class="min-h-[44px] min-w-[44px] flex items-center justify-center text-appleSecondaryText hover:text-gray-900 rounded-full"
+            aria-label="閉じる">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="p-5 space-y-4 overflow-y-auto">
+          <!-- 作品プルダウン -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">漫画タイトル *</label>
+            <div v-if="mangaRecords.length > 0">
+              <select 
+                v-model="vocabForm.mangaTitle" 
+                class="w-full px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px] bg-white">
+                <option value="" disabled>漫画を選択してください</option>
+                <option v-for="m in mangaRecords" :key="m.id" :value="m.title">{{ m.title }}</option>
+              </select>
+            </div>
+            <div v-else class="flex items-center justify-between p-2.5 bg-yellow-50 border border-yellow-200 rounded-xl">
+              <span class="text-xs text-yellow-800">作品が未登録です。「作品管理」から登録してください</span>
+              <button 
+                type="button" 
+                @click="closeModal(); currentPage = 'manga'; openMangaModal();" 
+                class="text-xs font-bold text-appleBlue underline min-h-[44px] flex items-center">
+                登録する
+              </button>
+            </div>
+          </div>
+
+          <!-- 単語入力 & 辞書自動取得 -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">英単語 / 熟語 *</label>
+            <div class="flex gap-2">
+              <input 
+                v-model.trim="vocabForm.term" 
+                @blur="handleAutoTranslate"
+                type="text" 
+                placeholder="例: hit the roof" 
+                class="flex-1 px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px]"
+              />
+              <button 
+                type="button" 
+                @click="handleAutoTranslate" 
+                :disabled="isLoadingDict || !vocabForm.term"
+                class="min-h-[44px] px-3 bg-gray-100 hover:bg-gray-200 active:scale-95 disabled:opacity-50 text-gray-700 font-semibold text-xs rounded-xl transition flex items-center gap-1">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                辞書取得
+              </button>
+            </div>
+            <p class="text-[11px] text-appleSecondaryText mt-1">※ フォーカスを外すか「辞書取得」を押すと自動翻訳されます。</p>
+          </div>
+
+          <!-- 取得中スケルトンUI -->
+          <div v-if="isLoadingDict" class="bg-gray-50 border border-appleSeparator/20 rounded-xl p-3 space-y-2 animate-skeleton">
+            <div class="h-3 bg-gray-200 rounded w-1/3"></div>
+            <div class="h-3 bg-gray-200 rounded w-3/4"></div>
+          </div>
+
+          <!-- 日本語訳（Shift + Enter送信ショートカット対応） -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">日本語訳・意味 *</label>
+            <input 
+              v-model.trim="vocabForm.definition" 
+              @keydown="handleFormKeydown"
+              type="text" 
+              placeholder="例: 激怒する、カンカンに怒る (Shift + Enter で即保存)" 
+              class="w-full px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px]"
+            />
+          </div>
+
+          <!-- 話数タグ -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">話数 / チャプター</label>
+            <input 
+              v-model.trim="vocabForm.chapter" 
+              @keydown="handleFormKeydown"
+              type="text" 
+              placeholder="例: Ch.1054" 
+              class="w-full px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px]"
+            />
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-appleSeparator/30 bg-appleBg/40 flex justify-end gap-2">
+          <button 
+            type="button" 
+            @click="closeModal" 
+            class="min-h-[44px] px-4 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-200/60 active:scale-95 transition">
+            キャンセル
+          </button>
+          <button 
+            type="button" 
+            @click="saveVocab" 
+            class="min-h-[44px] px-5 bg-appleBlue text-white rounded-xl text-sm font-semibold hover:opacity-90 active:scale-95 transition">
+            {{ isEditing ? '更新する' : '保存する' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: 漫画タイトルの追加（ジャンルアイコン選択式） -->
+    <div 
+      v-if="isMangaModalOpen" 
+      @click.self="closeMangaModal" 
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      
+      <div class="bg-appleCard w-full max-w-lg rounded-2xl shadow-2xl border border-appleSeparator/30 flex flex-col overflow-hidden max-h-[90vh]">
+        <div class="px-5 py-4 border-b border-appleSeparator/30 flex justify-between items-center bg-appleBg/50">
+          <h3 class="text-base font-bold text-gray-900">漫画作品の登録</h3>
+          <button 
+            @click="closeMangaModal" 
+            class="min-h-[44px] min-w-[44px] flex items-center justify-center text-appleSecondaryText hover:text-gray-900 rounded-full"
+            aria-label="閉じる">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+
+        <div class="p-5 space-y-4 overflow-y-auto">
+          <!-- タイトル入力（Shift + Enter送信ショートカット対応） -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">漫画のタイトル *</label>
+            <input 
+              v-model.trim="newMangaForm.title" 
+              @keydown="handleMangaFormKeydown"
+              type="text" 
+              placeholder="例: ONE PIECE, SPY×FAMILY (Shift + Enter で即保存)" 
+              class="w-full px-3 py-2 border border-appleSeparator/50 rounded-xl text-sm focus:ring-2 focus:ring-appleBlue/50 outline-none min-h-[44px]"
+            />
+          </div>
+
+          <!-- 5つのジャンルアイコン選択 -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-2">ジャンル識別アイコン *</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div 
+                v-for="genre in genreOptions" 
+                :key="genre.id"
+                @click="newMangaForm.genre = genre.id; refreshIcons();"
+                :class="newMangaForm.genre === genre.id ? 'ring-2 ring-appleBlue bg-blue-50/70 border-appleBlue' : 'border-appleSeparator/40 hover:bg-gray-50'"
+                class="p-3 border rounded-xl cursor-pointer flex items-center gap-3 transition min-h-[48px]">
+                <div :class="['w-9 h-9 rounded-lg flex items-center justify-center shrink-0', genre.bgClass]">
+                  <i :data-lucide="genre.icon" :class="['w-5 h-5', genre.textClass]"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs font-bold text-gray-900 truncate">{{ genre.label }}</div>
+                  <div class="text-[10px] text-appleSecondaryText truncate">{{ genre.desc }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-appleSeparator/30 bg-appleBg/40 flex justify-end gap-2">
+          <button 
+            type="button" 
+            @click="closeMangaModal" 
+            class="min-h-[44px] px-4 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-200/60 active:scale-95 transition">
+            キャンセル
+          </button>
+          <button 
+            type="button" 
+            @click="saveMangaRecord" 
+            class="min-h-[44px] px-5 bg-appleBlue text-white rounded-xl text-sm font-semibold hover:opacity-90 active:scale-95 transition">
+            作品を保存
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- バージョン表示（視認性を低く控えめに配置） -->
+    <footer class="mt-auto pt-6 pb-2 text-center">
+      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v1.2.0 • MangaVocab Engine</span>
+    </footer>
+
+  </div>
+
+  <script>
+    /**
+     * =========================================================================
+     * アプリケーション コアスクリプト (Vue 3 Composition API & IndexedDB)
+     * =========================================================================
+     */
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    // IndexedDB設定定義
+    // 既存データを消去せず維持するため、同一DB名とストア名を継承します
+    const DB_NAME = 'MangaVocabDB';
+    const DB_VERSION = 2; 
+    const STORE_VOCAB = 'vocabularies';
+    const STORE_MANGA = 'manga_titles';
+
+    /**
+     * IndexedDBの初期化
+     * 既存のデータストアを破棄せず、安全に接続します。
+     */
+    function initIndexedDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          // 単語ストアの存在確認（既存データを絶対に消去しない）
+          if (!db.objectStoreNames.contains(STORE_VOCAB)) {
+            db.createObjectStore(STORE_VOCAB, { keyPath: 'id', autoIncrement: true });
+          }
+          // 漫画ストアの存在確認
+          if (!db.objectStoreNames.contains(STORE_MANGA)) {
+            db.createObjectStore(STORE_MANGA, { keyPath: 'id', autoIncrement: true });
+          }
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    createApp({
+      setup() {
+        // ナビゲーション管理: 'vocab' (単語リスト) | 'manga' (作品管理)
+        const currentPage = ref('vocab');
+
+        const items = ref([]);         // 単語データ
+        const mangaRecords = ref([]);  // 漫画タイトルデータ
+        const searchQuery = ref('');   // 単語検索クエリ
+        const selectedManga = ref(''); // 作品絞り込み
+        const selectedChapter = ref(''); // 話数絞り込み
+        
+        // 暗記カード用：各単語カードのフリップ状態（裏表）を管理
+        const flippedCards = ref({});
+
+        const isModalOpen = ref(false);
+        const isEditing = ref(false);
+        const isLoadingDict = ref(false);
+
+        // 5つのジャンル定義（識別要素アイコン用）
+        const genreOptions = [
+          { id: 'action', label: 'バトル・アクション', desc: '冒険・ファンタジー・能力バトル', icon: 'flame', bgClass: 'bg-red-50 text-red-600', textClass: 'text-red-600' },
+          { id: 'romance', label: '恋愛・ラブコメ', desc: '学園・青春・オフィスラブ', icon: 'heart', bgClass: 'bg-pink-50 text-pink-600', textClass: 'text-pink-600' },
+          { id: 'mystery', label: 'サスペンス・ミステリー', desc: '推理・ホラー・心理戦', icon: 'shield-alert', bgClass: 'bg-purple-50 text-purple-600', textClass: 'text-purple-600' },
+          { id: 'comedy', label: '日常・コメディ', desc: 'ギャグ・ほのぼの・ショート', icon: 'smile', bgClass: 'bg-amber-50 text-amber-600', textClass: 'text-amber-600' },
+          { id: 'sports', label: 'スポーツ・頭脳戦', desc: '部活・競技・デスゲーム', icon: 'trophy', bgClass: 'bg-emerald-50 text-emerald-600', textClass: 'text-emerald-600' }
+        ];
+
+        // 単語登録・編集用フォーム
+        const vocabForm = ref({
+          id: null,
+          term: '',
+          definition: '',
+          phonetic: '',
+          partOfSpeech: '',
+          mangaTitle: '',
+          chapter: '',
+          updatedAt: null
+        });
+
+        // 漫画タイトル登録モーダル管理
+        const isMangaModalOpen = ref(false);
+        const newMangaForm = ref({
+          title: '',
+          genre: 'action' // デフォルトはバトル・アクション
+        });
+
+        let dbInstance = null;
+
+        /**
+         * ジャンルIDから表示情報（アイコン・色・ラベル）を逆引き取得
+         */
+        const getGenreInfo = (genreId) => {
+          const found = genreOptions.find(g => g.id === genreId);
+          return found || genreOptions[0];
+        };
+
+        /**
+         * IndexedDBから既存データを全件読み込み
+         */
+        const loadAllDataFromDB = async () => {
+          if (!dbInstance) return;
+          
+          // 単語ストアからの読み出し
+          const txVocab = dbInstance.transaction([STORE_VOCAB], 'readonly');
+          const storeVocab = txVocab.objectStore(STORE_VOCAB);
+          const reqVocab = storeVocab.getAll();
+          reqVocab.onsuccess = () => {
+            items.value = (reqVocab.result || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            refreshIcons();
+          };
+
+          // 漫画ストアからの読み出し
+          const txManga = dbInstance.transaction([STORE_MANGA], 'readonly');
+          const storeManga = txManga.objectStore(STORE_MANGA);
+          const reqManga = storeManga.getAll();
+          reqManga.onsuccess = () => {
+            mangaRecords.value = reqManga.result || [];
+            refreshIcons();
+          };
+        };
+
+        // IndexedDB: 単語保存（C & U）
+        const persistVocab = (record) => {
+          return new Promise((resolve, reject) => {
+            const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
+            const store = tx.objectStore(STORE_VOCAB);
+            const req = store.put(record);
+            req.onsuccess = () => resolve();
+            req.onerror = (e) => reject(e.target.error);
+          });
+        };
+
+        // IndexedDB: 単語削除（D: Delete）
+        const deleteVocabFromDB = (id) => {
+          return new Promise((resolve, reject) => {
+            const tx = dbInstance.transaction([STORE_VOCAB], 'readwrite');
+            const store = tx.objectStore(STORE_VOCAB);
+            const req = store.delete(id);
+            req.onsuccess = () => resolve();
+            req.onerror = (e) => reject(e.target.error);
+          });
+        };
+
+        // IndexedDB: 漫画保存（C & U）
+        const persistManga = (record) => {
+          return new Promise((resolve, reject) => {
+            const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
+            const store = tx.objectStore(STORE_MANGA);
+            const req = store.put(record);
+            req.onsuccess = () => resolve();
+            req.onerror = (e) => reject(e.target.error);
+          });
+        };
+
+        // IndexedDB: 漫画削除（D: Delete）
+        const deleteMangaFromDB = (id) => {
+          return new Promise((resolve, reject) => {
+            const tx = dbInstance.transaction([STORE_MANGA], 'readwrite');
+            const store = tx.objectStore(STORE_MANGA);
+            const req = store.delete(id);
+            req.onsuccess = () => resolve();
+            req.onerror = (e) => reject(e.target.error);
+          });
+        };
+
+        /**
+         * Lucideベクターアイコンの再評価・描画
+         */
+        const refreshIcons = () => {
+          nextTick(() => {
+            if (window.lucide) {
+              window.lucide.createIcons();
+            }
+          });
+        };
+
+        /**
+         * 暗記カードの裏表フリップ切り替え
+         */
+        const toggleCardFlip = (id) => {
+          flippedCards.value[id] = !flippedCards.value[id];
+          refreshIcons();
+        };
+
+        /**
+         * 外部辞書・翻訳APIによる自動翻訳
+         */
+        const handleAutoTranslate = async () => {
+          const query = vocabForm.value.term.trim();
+          if (!query) return;
+
+          isLoadingDict.value = true;
+          try {
+            // 品詞・発音記号
+            fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(query)}`)
+              .then(res => res.ok ? res.json() : null)
+              .then(dictData => {
+                if (dictData && dictData.length > 0) {
+                  const entry = dictData[0];
+                  vocabForm.value.phonetic = entry.phonetic || (entry.phonetics && entry.phonetics.find(p => p.text)?.text) || '';
+                  if (entry.meanings && entry.meanings.length > 0) {
+                    vocabForm.value.partOfSpeech = entry.meanings[0].partOfSpeech || '';
+                  }
+                }
+              })
+              .catch(() => {});
+
+            // 日本語翻訳
+            const transRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(query)}&langpair=en|ja`);
+            if (!transRes.ok) {
+              throw new Error(`HTTP Error: ${transRes.status}`);
+            }
+            const transData = await transRes.json();
+            if (transData?.responseData?.translatedText) {
+              if (!vocabForm.value.definition) {
+                vocabForm.value.definition = transData.responseData.translatedText;
+              }
+            }
+          } catch (err) {
+            alert(`【通信エラー】自動翻訳の取得に失敗しました。\n理由: ${err.message}\n手動で日本語訳を入力してください。`);
+          } finally {
+            isLoadingDict.value = false;
+          }
+        };
+
+        /**
+         * 漫画タイトルの新規保存（API通信を行わずローカルで安定即時登録）
+         */
+        const saveMangaRecord = async () => {
+          if (!newMangaForm.value.title.trim()) {
+            alert('漫画タイトルを入力してください。');
+            return;
+          }
+          const record = {
+            title: newMangaForm.value.title.trim(),
+            genre: newMangaForm.value.genre || 'action',
+            createdAt: Date.now()
+          };
+          try {
+            await persistManga(record);
+            await loadAllDataFromDB();
+            closeMangaModal();
+          } catch (err) {
+            alert(`漫画タイトルの保存に失敗しました。\n理由: ${err.message}`);
+          }
+        };
+
+        /**
+         * 漫画タイトルの削除
+         */
+        const confirmDeleteManga = async (id, title) => {
+          if (confirm(`作品「${title}」を削除しますか？\n（※登録済みの単語データは消去されません）`)) {
+            try {
+              await deleteMangaFromDB(id);
+              await loadAllDataFromDB();
+            } catch (err) {
+              alert(`削除に失敗しました。\n理由: ${err.message}`);
+            }
+          }
+        };
+
+        /**
+         * 単語モーダル操作
+         */
+        const openAddModal = () => {
+          isEditing.value = false;
+          const defaultTitle = selectedManga.value || (mangaRecords.value[0]?.title || '');
+          vocabForm.value = {
+            id: null,
+            term: '',
+            definition: '',
+            phonetic: '',
+            partOfSpeech: '',
+            mangaTitle: defaultTitle,
+            chapter: '',
+            updatedAt: null
+          };
+          isModalOpen.value = true;
+          refreshIcons();
+        };
+
+        const openEditModal = (item) => {
+          isEditing.value = true;
+          vocabForm.value = { ...item };
+          isModalOpen.value = true;
+          refreshIcons();
+        };
+
+        const closeModal = () => {
+          isModalOpen.value = false;
+        };
+
+        const openMangaModal = () => {
+          newMangaForm.value = {
+            title: '',
+            genre: 'action'
+          };
+          isMangaModalOpen.value = true;
+          refreshIcons();
+        };
+
+        const closeMangaModal = () => {
+          isMangaModalOpen.value = false;
+        };
+
+        /**
+         * 誤操作防止：Shift + Enter による送信
+         */
+        const handleFormKeydown = (e) => {
+          if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            saveVocab();
+          }
+        };
+
+        const handleMangaFormKeydown = (e) => {
+          if (e.key === 'Enter' && e.shiftKey) {
+            e.preventDefault();
+            saveMangaRecord();
+          }
+        };
+
+        /**
+         * 単語の保存
+         */
+        const saveVocab = async () => {
+          if (!vocabForm.value.mangaTitle) {
+            alert('漫画タイトルを選択してください。作品管理から登録が可能です。');
+            return;
+          }
+          if (!vocabForm.value.term.trim()) {
+            alert('単語または熟語を入力してください。');
+            return;
+          }
+          if (!vocabForm.value.definition.trim()) {
+            alert('日本語訳・意味を入力してください。');
+            return;
+          }
+
+          const record = {
+            ...vocabForm.value,
+            term: vocabForm.value.term.trim(),
+            definition: vocabForm.value.definition.trim(),
+            mangaTitle: vocabForm.value.mangaTitle.trim(),
+            chapter: vocabForm.value.chapter.trim(),
+            updatedAt: Date.now()
+          };
+
+          if (!isEditing.value) {
+            delete record.id;
+          }
+
+          try {
+            await persistVocab(record);
+            await loadAllDataFromDB();
+            closeModal();
+          } catch (err) {
+            alert(`単語の保存に失敗しました。\n理由: ${err.message}`);
+          }
+        };
+
+        /**
+         * 単語の削除
+         */
+        const confirmDeleteItem = async (id) => {
+          if (confirm('この単語カードを削除してもよろしいですか？')) {
+            try {
+              await deleteVocabFromDB(id);
+              await loadAllDataFromDB();
+            } catch (err) {
+              alert(`削除に失敗しました。\n理由: ${err.message}`);
+            }
+          }
+        };
+
+        // 絞り込み用の計算プロパティ
+        const activeMangaTitles = computed(() => {
+          const fromManga = mangaRecords.value.map(m => m.title);
+          const fromVocab = items.value.map(i => i.mangaTitle);
+          return Array.from(new Set([...fromManga, ...fromVocab])).filter(Boolean);
+        });
+
+        const chapterList = computed(() => {
+          const relevant = selectedManga.value 
+            ? items.value.filter(i => i.mangaTitle === selectedManga.value)
+            : items.value;
+          return Array.from(new Set(relevant.map(i => i.chapter).filter(Boolean)));
+        });
+
+        const countByManga = (mangaTitle) => {
+          return items.value.filter(i => i.mangaTitle === mangaTitle).length;
+        };
+
+        const filteredItems = computed(() => {
+          return items.value.filter(item => {
+            const matchManga = !selectedManga.value || item.mangaTitle === selectedManga.value;
+            const matchChapter = !selectedChapter.value || item.chapter === selectedChapter.value;
+            const q = searchQuery.value.toLowerCase();
+            const matchQuery = !q || 
+              item.term.toLowerCase().includes(q) || 
+              item.definition.toLowerCase().includes(q);
+            return matchManga && matchChapter && matchQuery;
+          });
+        });
+
+        // 起動時初期化
+        onMounted(async () => {
+          try {
+            dbInstance = await initIndexedDB();
+            await loadAllDataFromDB();
+          } catch (e) {
+            alert('IndexedDBの初期化に失敗しました。プライベートブラウズ設定等を確認してください。');
+          }
+          refreshIcons();
+        });
+
+        return {
+          currentPage,
+          items,
+          mangaRecords,
+          searchQuery,
+          selectedManga,
+          selectedChapter,
+          flippedCards,
+          isModalOpen,
+          isEditing,
+          isLoadingDict,
+          genreOptions,
+          vocabForm,
+          isMangaModalOpen,
+          newMangaForm,
+          activeMangaTitles,
+          chapterList,
+          filteredItems,
+          getGenreInfo,
+          countByManga,
+          toggleCardFlip,
+          openAddModal,
+          openEditModal,
+          closeModal,
+          openMangaModal,
+          closeMangaModal,
+          saveMangaRecord,
+          confirmDeleteManga,
+          handleAutoTranslate,
+          handleFormKeydown,
+          handleMangaFormKeydown,
+          saveVocab,
+          confirmDeleteItem
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
