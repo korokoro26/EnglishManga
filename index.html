@@ -461,7 +461,7 @@
         <div class="px-5 py-4 border-b border-appleSeparator/30 flex justify-between items-center bg-appleBg/50">
           <div class="flex items-center gap-2">
             <i data-lucide="book-marked" class="w-5 h-5 text-appleBlue"></i>
-            <h3 class="text-base font-bold text-gray-900">詳細辞書 (Gemini 3.8 Flash)</h3>
+            <h3 class="text-base font-bold text-gray-900">詳細辞書 (Gemini 3.5 Flash Lite)</h3>
           </div>
           <button 
             @click="closeDictDetailModal" 
@@ -543,9 +543,9 @@
   <script>
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
-    const GEMINI_API_KEY = 'AQ.Ab8RN6JP3NwtB-_RrWGqa5EkRGLGYmkikBqGCPeRhr4vkQeiVg';
-    const PRIMARY_MODEL = 'gemini-3.8-flash';
-    const FALLBACK_MODEL = 'gemini-2.5-flash';
+    const GEMINI_API_KEY = 'AQ.Ab8RN6I6cJuU0XlQignJlyjLhF-ilBD20d34pSREOKOqZOr9Og';
+    const PRIMARY_MODEL = 'gemini-3.5-flash-lite';
+    const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
 
     const DB_NAME = 'MangaVocabDB';
     const DB_VERSION = 2;
@@ -1021,7 +1021,6 @@ Format:
             return;
           }
 
-          // 構文エラーを修正した箇所
           const record = {
             ...vocabForm.value,
             term: vocabForm.value.term.trim(),
