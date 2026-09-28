@@ -535,7 +535,7 @@
     </div>
 
     <footer class="mt-auto pt-6 pb-2 text-center">
-      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.2.1 • MangaVocab</span>
+      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.3.0 • MangaVocab</span>
     </footer>
 
   </div>
@@ -548,9 +548,10 @@
     const FALLBACK_MODEL = 'gemini-3.1-flash-lite';
 
     const DB_NAME = 'MangaVocabDB';
-    const DB_VERSION = 2;
+    const DB_VERSION = 3; // 辞書キャッシュストア追加に伴いバージョンアップ
     const STORE_VOCAB = 'vocabularies';
     const STORE_MANGA = 'manga_titles';
+    const STORE_CACHE = 'dict_cache';
 
     let isIndexedDBSupported = true;
     let dbInstance = null;
@@ -570,6 +571,9 @@
             }
             if (!db.objectStoreNames.contains(STORE_MANGA)) {
               db.createObjectStore(STORE_MANGA, { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains(STORE_CACHE)) {
+              db.createObjectStore(STORE_CACHE, { keyPath: 'term' });
             }
           };
           req.onsuccess = (e) => {
@@ -608,7 +612,7 @@
         const dictDetailData = ref(null);
         const dictDetailError = ref('');
 
-        const dictCache = new Map();
+        const dictCache = new Map(); // メモリ内L1キャッシュ
 
         const genreOptions = [
           { id: 'action', label: 'バトル・アクション', desc: '冒険・ファンタジー・能力バトル', icon: 'flame', bgClass: 'bg-red-50 text-red-600', textClass: 'text-red-600' },
@@ -633,6 +637,56 @@
           title: '',
           genre: 'action'
         });
+
+        // 永続キャッシュ（IndexedDB / LocalStorage）から読み出し
+        const getPersistedDictCache = (term) => {
+          return new Promise((resolve) => {
+            const key = term.toLowerCase().trim();
+            if (isIndexedDBSupported && dbInstance) {
+              try {
+                const tx = dbInstance.transaction([STORE_CACHE], 'readonly');
+                const store = tx.objectStore(STORE_CACHE);
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result ? req.result.data : null);
+                req.onerror = () => resolve(null);
+                return;
+              } catch (e) {
+                // fall through
+              }
+            }
+            try {
+              const raw = localStorage.getItem(`cache_${key}`);
+              resolve(raw ? JSON.parse(raw) : null);
+            } catch (e) {
+              resolve(null);
+            }
+          });
+        };
+
+        // 永続キャッシュ（IndexedDB / LocalStorage）へ保存
+        const setPersistedDictCache = (term, data) => {
+          return new Promise((resolve) => {
+            const key = term.toLowerCase().trim();
+            if (isIndexedDBSupported && dbInstance) {
+              try {
+                const tx = dbInstance.transaction([STORE_CACHE], 'readwrite');
+                const store = tx.objectStore(STORE_CACHE);
+                store.put({ term: key, data, cachedAt: Date.now() });
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                return;
+              } catch (e) {
+                // fall through
+              }
+            }
+            try {
+              localStorage.setItem(`cache_${key}`, JSON.stringify(data));
+              resolve(true);
+            } catch (e) {
+              resolve(false);
+            }
+          });
+        };
 
         const selectManga = (title) => {
           selectedManga.value = title;
@@ -788,7 +842,25 @@
           });
         };
 
-        const fetchFromGemini = async (term) => {
+        // キャッシュ（メモリ＋永続DB）を優先し、無ければGemini APIを叩くコア関数
+        const fetchOrGetCachedDict = async (term) => {
+          const key = term.trim().toLowerCase();
+          if (!key) return null;
+
+          // 1. メモリキャッシュ (L1)
+          if (dictCache.has(key)) {
+            const cached = dictCache.get(key);
+            if (cached.success) return cached.data;
+          }
+
+          // 2. 永続ストレージキャッシュ (L2: IndexedDB / LocalStorage)
+          const stored = await getPersistedDictCache(key);
+          if (stored) {
+            dictCache.set(key, { success: true, data: stored });
+            return stored;
+          }
+
+          // 3. キャッシュ未存在時のみGemini APIをコール
           const prompt = `Analyze the English term or idiom "${term}" and provide dictionary information in pure JSON format without markdown ticks.
 Format:
 {
@@ -826,7 +898,13 @@ Format:
           if (!rawText) throw new Error('Gemini APIから有効な応答を取得できませんでした。');
 
           const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-          return JSON.parse(cleaned);
+          const parsed = JSON.parse(cleaned);
+
+          // メモリおよび永続ストレージに保存（次回以降完全無料・即座読み出し）
+          dictCache.set(key, { success: true, data: parsed });
+          await setPersistedDictCache(key, parsed);
+
+          return parsed;
         };
 
         const handleAutoTranslate = async () => {
@@ -835,14 +913,13 @@ Format:
 
           isLoadingDict.value = true;
           try {
-            const result = await fetchFromGemini(query);
+            const result = await fetchOrGetCachedDict(query);
             if (result) {
               vocabForm.value.phonetic = result.phonetic || '';
               vocabForm.value.partOfSpeech = result.partOfSpeech || '';
               if (!vocabForm.value.definition) {
                 vocabForm.value.definition = result.definition_ja || '';
               }
-              dictCache.set(query.toLowerCase(), { success: true, data: result });
             }
           } catch (err) {
             alert(`【Gemini連携エラー】\n${err.message}\n手動で入力してください。`);
@@ -856,10 +933,7 @@ Format:
           if (!key || dictCache.has(key)) return;
 
           try {
-            const data = await fetchFromGemini(key);
-            if (data) {
-              dictCache.set(key, { success: true, data });
-            }
+            await fetchOrGetCachedDict(key);
           } catch (e) {
             console.debug('Prefetch skipped:', e);
           }
@@ -888,26 +962,13 @@ Format:
           dictDetailError.value = '';
           dictDetailData.value = null;
 
-          if (dictCache.has(key)) {
-            const cached = dictCache.get(key);
-            if (cached.success) {
-              dictDetailData.value = cached.data;
-            } else {
-              dictDetailError.value = cached.error;
-            }
-            isLoadingDictDetail.value = false;
-            refreshIcons();
-            return;
-          }
-
           isLoadingDictDetail.value = true;
           refreshIcons();
 
           try {
-            const data = await fetchFromGemini(cleanTerm);
+            const data = await fetchOrGetCachedDict(cleanTerm);
             if (data) {
               dictDetailData.value = data;
-              dictCache.set(key, { success: true, data });
             } else {
               throw new Error('辞書情報が見つかりませんでした。');
             }
