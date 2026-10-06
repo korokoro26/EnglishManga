@@ -78,7 +78,7 @@
   <div id="app" class="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-6 py-4">
 
     <!-- ヘッダー -->
-    <header class="flex items-center justify-between py-3 mb-5 border-b border-appleSeparator/40">
+    <header class="flex items-center justify-between py-3 mb-3 border-b border-appleSeparator/40">
       <div>
         <h1 class="text-2xl font-bold tracking-tight text-gray-900">MangaVocab</h1>
         <p class="text-xs text-appleSecondaryText font-medium">英語漫画ボキャブラリー記録・暗記学習</p>
@@ -96,7 +96,7 @@
         </button>
 
         <button 
-          v-if="!selectedManga"
+          v-if="navigationTab === 'manga' && !selectedManga"
           @click="openMangaModal" 
           class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-4 py-2 bg-appleBlue text-white font-semibold text-sm rounded-full shadow-sm hover:opacity-90 active:scale-95 transition-all">
           <i data-lucide="plus" class="w-4 h-4 mr-1"></i> 作品を登録
@@ -110,226 +110,484 @@
       </div>
     </header>
 
+    <!-- ナビゲーションタブ（作品別 ⇄ すべての単語一覧） -->
+    <nav class="flex items-center gap-2 mb-5">
+      <button 
+        @click="switchTab('manga')"
+        :class="navigationTab === 'manga' ? 'bg-appleBlue text-white shadow-xs' : 'bg-gray-200/70 text-gray-700 hover:bg-gray-200'"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition active:scale-95 min-h-[40px]">
+        <i data-lucide="library" class="w-4 h-4"></i>
+        <span>作品別</span>
+        <span class="ml-1 text-[11px] opacity-80 font-normal">({{ mangaRecords.length }})</span>
+      </button>
+
+      <button 
+        @click="switchTab('all_words')"
+        :class="navigationTab === 'all_words' ? 'bg-appleBlue text-white shadow-xs' : 'bg-gray-200/70 text-gray-700 hover:bg-gray-200'"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition active:scale-95 min-h-[40px]">
+        <i data-lucide="book-open-check" class="w-4 h-4"></i>
+        <span>すべての単語</span>
+        <span class="ml-1 text-[11px] opacity-80 font-normal">({{ items.length }})</span>
+      </button>
+    </nav>
+
     <main class="flex-1 flex flex-col">
 
-      <!-- STEP 1: 作品一覧ビュー -->
-      <section v-if="!selectedManga" class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-bold text-gray-900">作品一覧</h2>
-          <span class="text-xs text-appleSecondaryText">作品を選択して単語を暗記学習</span>
-        </div>
-
-        <div v-if="mangaRecords.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
-          <i data-lucide="library" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
-          <p class="text-sm font-medium text-gray-800">登録された漫画がありません</p>
-          <p class="text-xs text-appleSecondaryText mt-1">「作品を登録」ボタンから作品を追加してください</p>
-        </div>
-
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          <div 
-            v-for="manga in mangaRecords" 
-            :key="manga.id" 
-            @click="selectManga(manga.title)"
-            class="bg-appleCard rounded-2xl border border-appleSeparator/30 shadow-sm overflow-hidden flex flex-col justify-between group hover:shadow-md cursor-pointer transition-all active:scale-[0.98]">
-            
-            <div :class="['relative w-full aspect-[4/3] flex flex-col items-center justify-center transition-colors', getGenreInfo(manga.genre).bgClass]">
-              <i :data-lucide="getGenreInfo(manga.genre).icon" :class="['w-10 h-10 mb-1.5', getGenreInfo(manga.genre).textClass]"></i>
-              <span :class="['text-[11px] font-semibold tracking-wide', getGenreInfo(manga.genre).textClass]">
-                {{ getGenreInfo(manga.genre).label }}
-              </span>
-            </div>
-
-            <div class="p-3">
-              <h3 class="text-sm font-bold text-gray-900 truncate" :title="manga.title">{{ manga.title }}</h3>
-              <p class="text-[11px] text-appleSecondaryText mt-0.5">{{ countByManga(manga.title) }} 語収録</p>
-              
-              <div class="mt-2 pt-2 border-t border-appleSeparator/20 flex items-center justify-between" @click.stop>
-                <span class="text-[11px] text-appleBlue font-medium flex items-center">開く <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i></span>
-                <button 
-                  @click="confirmDeleteManga(manga.id, manga.title)" 
-                  class="min-h-[44px] min-w-[44px] flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition active:scale-95" 
-                  title="漫画を削除"
-                  aria-label="漫画を削除">
-                  <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
-              </div>
-            </div>
+      <!-- ============================================== -->
+      <!-- VIEW A: 作品別タブ                          -->
+      <!-- ============================================== -->
+      <template v-if="navigationTab === 'manga'">
+        <!-- STEP 1: 作品一覧ビュー -->
+        <section v-if="!selectedManga" class="space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-gray-900">作品一覧</h2>
+            <span class="text-xs text-appleSecondaryText">作品を選択して単語を暗記学習</span>
           </div>
-        </div>
-      </section>
 
-      <!-- STEP 2: 作品詳細 & 単語暗記カードビュー -->
-      <section v-else class="space-y-4">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm">
-          <div class="flex items-center gap-3">
-            <button 
-              @click="selectedManga = ''; currentMode = 'view';" 
-              class="min-h-[44px] min-w-[44px] px-3 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-semibold text-xs rounded-xl transition flex items-center gap-1"
-              aria-label="作品一覧へ戻る">
-              <i data-lucide="arrow-left" class="w-4 h-4"></i> 作品一覧
-            </button>
-            <div>
-              <div class="flex items-center gap-2">
-                <h2 class="text-lg font-bold text-gray-900 leading-tight">{{ selectedManga }}</h2>
-                <span class="text-xs bg-blue-50 text-appleBlue font-semibold px-2 py-0.5 rounded-full">
-                  {{ filteredItems.length }} 語
+          <div v-if="mangaRecords.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
+            <i data-lucide="library" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
+            <p class="text-sm font-medium text-gray-800">登録された漫画がありません</p>
+            <p class="text-xs text-appleSecondaryText mt-1">「作品を登録」ボタンから作品を追加してください</p>
+          </div>
+
+          <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div 
+              v-for="manga in mangaRecords" 
+              :key="manga.id" 
+              @click="selectManga(manga.title)"
+              class="bg-appleCard rounded-2xl border border-appleSeparator/30 shadow-sm overflow-hidden flex flex-col justify-between group hover:shadow-md cursor-pointer transition-all active:scale-[0.98]">
+              
+              <div :class="['relative w-full aspect-[4/3] flex flex-col items-center justify-center transition-colors', getGenreInfo(manga.genre).bgClass]">
+                <i :data-lucide="getGenreInfo(manga.genre).icon" :class="['w-10 h-10 mb-1.5', getGenreInfo(manga.genre).textClass]"></i>
+                <span :class="['text-[11px] font-semibold tracking-wide', getGenreInfo(manga.genre).textClass]">
+                  {{ getGenreInfo(manga.genre).label }}
                 </span>
               </div>
-              <p class="text-[11px] text-appleSecondaryText">
-                <span v-if="currentMode === 'view'">カードタップで反転 (英 ⇄ 日)</span>
-                <span v-else-if="currentMode === 'edit'" class="text-amber-600 font-bold">カードをタップして編集</span>
-                <span v-else-if="currentMode === 'delete'" class="text-red-600 font-bold">カードをタップして削除</span>
-              </p>
+
+              <div class="p-3">
+                <h3 class="text-sm font-bold text-gray-900 truncate" :title="manga.title">{{ manga.title }}</h3>
+                <p class="text-[11px] text-appleSecondaryText mt-0.5">{{ countByManga(manga.title) }} 語収録</p>
+                
+                <div class="mt-2 pt-2 border-t border-appleSeparator/20 flex items-center justify-between" @click.stop>
+                  <span class="text-[11px] text-appleBlue font-medium flex items-center">開く <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i></span>
+                  <button 
+                    @click="confirmDeleteManga(manga.id, manga.title)" 
+                    class="min-h-[44px] min-w-[44px] flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition active:scale-95" 
+                    title="漫画を削除"
+                    aria-label="漫画を削除">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 2: 作品詳細 & 単語暗記カードビュー -->
+        <section v-else class="space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm">
+            <div class="flex items-center gap-3">
+              <button 
+                @click="selectedManga = ''; currentMode = 'view';" 
+                class="min-h-[44px] min-w-[44px] px-3 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-semibold text-xs rounded-xl transition flex items-center gap-1"
+                aria-label="作品一覧へ戻る">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> 作品一覧
+              </button>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-lg font-bold text-gray-900 leading-tight">{{ selectedManga }}</h2>
+                  <span class="text-xs bg-blue-50 text-appleBlue font-semibold px-2 py-0.5 rounded-full">
+                    {{ filteredItems.length }} 語
+                  </span>
+                </div>
+                <p class="text-[11px] text-appleSecondaryText">
+                  <span v-if="currentMode === 'view'">カードタップで反転 (英 ⇄ 日)</span>
+                  <span v-else-if="currentMode === 'edit'" class="text-amber-600 font-bold">カードをタップして編集</span>
+                  <span v-else-if="currentMode === 'delete'" class="text-red-600 font-bold">カードをタップして削除</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- モード切替 -->
+              <div class="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+                <button 
+                  @click="currentMode = 'view'" 
+                  :class="currentMode === 'view' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'"
+                  class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i> 通常
+                </button>
+                <button 
+                  @click="currentMode = 'edit'" 
+                  :class="currentMode === 'edit' ? 'bg-amber-500 text-white shadow-xs' : 'text-gray-500 hover:text-amber-600'"
+                  class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i> 編集
+                </button>
+                <button 
+                  @click="currentMode = 'delete'" 
+                  :class="currentMode === 'delete' ? 'bg-red-500 text-white shadow-xs' : 'text-gray-500 hover:text-red-600'"
+                  class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 削除
+                </button>
+              </div>
+
+              <!-- 検索 -->
+              <div class="relative flex-1 sm:w-48">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-appleSecondaryText"></i>
+                <input 
+                  v-model="searchQuery" 
+                  type="text" 
+                  placeholder="単語・訳を検索..." 
+                  class="w-full pl-9 pr-3 py-2 bg-appleBg border border-appleSeparator/40 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]"
+                />
+              </div>
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <!-- モード切替 -->
-            <div class="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
-              <button 
-                @click="currentMode = 'view'" 
-                :class="currentMode === 'view' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'"
-                class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
-                <i data-lucide="eye" class="w-3.5 h-3.5"></i> 通常
-              </button>
-              <button 
-                @click="currentMode = 'edit'" 
-                :class="currentMode === 'edit' ? 'bg-amber-500 text-white shadow-xs' : 'text-gray-500 hover:text-amber-600'"
-                class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
-                <i data-lucide="pencil" class="w-3.5 h-3.5"></i> 編集
-              </button>
-              <button 
-                @click="currentMode = 'delete'" 
-                :class="currentMode === 'delete' ? 'bg-red-500 text-white shadow-xs' : 'text-gray-500 hover:text-red-600'"
-                class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 削除
-              </button>
-            </div>
-
-            <!-- 検索 -->
-            <div class="relative flex-1 sm:w-48">
-              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-appleSecondaryText"></i>
-              <input 
-                v-model="searchQuery" 
-                type="text" 
-                placeholder="単語・訳を検索..." 
-                class="w-full pl-9 pr-3 py-2 bg-appleBg border border-appleSeparator/40 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]"
-              />
-            </div>
+          <div v-if="filteredItems.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
+            <i data-lucide="book-open" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
+            <p class="text-sm font-medium text-gray-800">登録された単語がありません</p>
+            <p class="text-xs text-appleSecondaryText mt-1">右上の「単語を追加」からこの作品の表現を登録しましょう</p>
           </div>
-        </div>
 
-        <div v-if="filteredItems.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
-          <i data-lucide="book-open" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
-          <p class="text-sm font-medium text-gray-800">登録された単語がありません</p>
-          <p class="text-xs text-appleSecondaryText mt-1">右上の「単語を追加」からこの作品の表現を登録しましょう</p>
-        </div>
-
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <div 
-            v-for="item in filteredItems" 
-            :key="item.id" 
-            class="perspective-1000 min-h-[160px] cursor-pointer"
-            @mouseenter="prefetchDictDetail(item.term)"
-            @touchstart="prefetchDictDetail(item.term)"
-            @click="handleCardClick(item)">
-            
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <div 
-              class="relative w-full h-full duration-500 transform-style-preserve-3d transition-transform rounded-2xl"
-              :class="{ 
-                'rotate-y-180': flippedCards[item.id] && currentMode === 'view',
-                'ring-2 ring-amber-400': currentMode === 'edit',
-                'ring-2 ring-red-400': currentMode === 'delete'
-              }">
+              v-for="item in filteredItems" 
+              :key="item.id" 
+              class="perspective-1000 min-h-[175px] cursor-pointer"
+              @mouseenter="prefetchDictDetail(item.term)"
+              @touchstart="prefetchDictDetail(item.term)"
+              @click="handleCardClick(item)">
               
-              <!-- 表面：英語 -->
-              <div class="absolute inset-0 w-full h-full bg-appleCard p-5 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full">英語</span>
-                    
-                    <div class="flex items-center gap-1">
-                      <!-- 高精度発話ボタン (表面) -->
-                      <button 
-                        @click.stop="speakWord(item.term, item.id)"
-                        class="min-h-[36px] min-w-[36px] p-1.5 rounded-full text-gray-600 hover:text-appleBlue hover:bg-blue-50 active:scale-90 transition flex items-center justify-center"
-                        :class="{ 'text-appleBlue bg-blue-100/70 animate-pulse': playingWordId === item.id }"
-                        title="発音を聞く"
-                        aria-label="発音を聞く">
-                        <i :data-lucide="playingWordId === item.id ? 'volume-2' : 'volume-1'" class="w-4 h-4"></i>
-                      </button>
+              <div 
+                class="relative w-full h-full duration-500 transform-style-preserve-3d transition-transform rounded-2xl"
+                :class="{ 
+                  'rotate-y-180': flippedCards[item.id] && currentMode === 'view',
+                  'ring-2 ring-amber-400': currentMode === 'edit',
+                  'ring-2 ring-red-400': currentMode === 'delete'
+                }">
+                
+                <!-- 表面：英語 -->
+                <div class="absolute inset-0 w-full h-full bg-appleCard p-5 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full">英語</span>
+                      
+                      <div class="flex items-center gap-1">
+                        <!-- 高精度発話ボタン (表面) -->
+                        <button 
+                          @click.stop="speakWord(item.term, item.id)"
+                          class="min-h-[36px] min-w-[36px] p-1.5 rounded-full text-gray-600 hover:text-appleBlue hover:bg-blue-50 active:scale-90 transition flex items-center justify-center"
+                          :class="{ 'text-appleBlue bg-blue-100/70 animate-pulse': playingWordId === item.id }"
+                          title="発音を聞く"
+                          aria-label="発音を聞く">
+                          <i :data-lucide="playingWordId === item.id ? 'volume-2' : 'volume-1'" class="w-4 h-4"></i>
+                        </button>
 
-                      <span v-if="currentMode === 'edit'" class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                        <i data-lucide="pencil" class="w-3 h-3"></i> 編集
-                      </span>
-                      <span v-else-if="currentMode === 'delete'" class="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                        <i data-lucide="trash-2" class="w-3 h-3"></i> 削除
+                        <span v-if="currentMode === 'edit'" class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <i data-lucide="pencil" class="w-3 h-3"></i> 編集
+                        </span>
+                        <span v-else-if="currentMode === 'delete'" class="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <i data-lucide="trash-2" class="w-3 h-3"></i> 削除
+                        </span>
+                      </div>
+                    </div>
+
+                    <h3 class="text-xl font-bold text-gray-900 tracking-wide mt-1">{{ item.term }}</h3>
+                    
+                    <div class="flex items-center gap-2 mt-1.5" v-if="item.phonetic || item.partOfSpeech">
+                      <span v-if="item.phonetic" class="text-xs text-appleSecondaryText font-mono">/{{ item.phonetic }}/</span>
+                      <span v-if="item.partOfSpeech" class="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-medium">
+                        {{ formatPartOfSpeech(item.partOfSpeech) }}
                       </span>
                     </div>
                   </div>
 
-                  <h3 class="text-xl font-bold text-gray-900 tracking-wide mt-1">{{ item.term }}</h3>
-                  
-                  <div class="flex items-center gap-2 mt-1.5" v-if="item.phonetic || item.partOfSpeech">
-                    <span v-if="item.phonetic" class="text-xs text-appleSecondaryText font-mono">/{{ item.phonetic }}/</span>
-                    <span v-if="item.partOfSpeech" class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-medium">
-                      {{ item.partOfSpeech }}
+                  <div class="pt-3 border-t border-appleSeparator/20 flex items-center justify-between text-xs text-appleSecondaryText">
+                    <div v-if="currentMode === 'view'" class="flex items-center gap-2.5">
+                      <button 
+                        @click.stop="openDictDetailModal(item.term)"
+                        class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
+                        <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 詳細辞書
+                      </button>
+                      <a 
+                        :href="getImageSearchUrl(item.term)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="text-[11px] text-gray-600 hover:text-appleBlue hover:underline flex items-center gap-1 min-h-[36px] py-1 bg-gray-50 px-2 rounded-lg border border-appleSeparator/30"
+                        title="Google画像検索を開く">
+                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                        <span>image</span>
+                      </a>
+                    </div>
+                    <span v-else class="text-[11px] text-gray-400">選択待機中</span>
+
+                    <span v-if="currentMode === 'view'" class="text-[11px] flex items-center gap-0.5">
+                      <i data-lucide="touch-3" class="w-3.5 h-3.5"></i> 反転
                     </span>
                   </div>
                 </div>
 
-                <div class="pt-3 border-t border-appleSeparator/20 flex items-center justify-between text-xs text-appleSecondaryText">
-                  <button 
-                    v-if="currentMode === 'view'"
-                    @click.stop="openDictDetailModal(item.term)"
-                    class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
-                    <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 辞書詳細
-                  </button>
-                  <span v-else class="text-[11px] text-gray-400">選択待機中</span>
+                <!-- 裏面：日本語訳 -->
+                <div class="absolute inset-0 w-full h-full bg-blue-50/90 p-5 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded-full">日本語訳</span>
+                      
+                      <button 
+                        @click.stop="speakWord(item.term, item.id)"
+                        class="min-h-[36px] min-w-[36px] p-1.5 rounded-full text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 active:scale-90 transition flex items-center justify-center"
+                        :class="{ 'text-appleBlue bg-white animate-pulse shadow-xs': playingWordId === item.id }"
+                        title="英語の発音を聞く"
+                        aria-label="英語の発音を聞く">
+                        <i :data-lucide="playingWordId === item.id ? 'volume-2' : 'volume-1'" class="w-4 h-4"></i>
+                      </button>
+                    </div>
 
-                  <span v-if="currentMode === 'view'" class="text-[11px] flex items-center gap-0.5">
-                    <i data-lucide="touch-3" class="w-3.5 h-3.5"></i> 反転
-                  </span>
-                </div>
-              </div>
-
-              <!-- 裏面：日本語訳 -->
-              <div class="absolute inset-0 w-full h-full bg-blue-50/90 p-5 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded-full">日本語訳</span>
-                    
-                    <!-- 高精度発話ボタン (裏面) -->
-                    <button 
-                      @click.stop="speakWord(item.term, item.id)"
-                      class="min-h-[36px] min-w-[36px] p-1.5 rounded-full text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 active:scale-90 transition flex items-center justify-center"
-                      :class="{ 'text-appleBlue bg-white animate-pulse shadow-xs': playingWordId === item.id }"
-                      title="英語の発音を聞く"
-                      aria-label="英語の発音を聞く">
-                      <i :data-lucide="playingWordId === item.id ? 'volume-2' : 'volume-1'" class="w-4 h-4"></i>
-                    </button>
+                    <p class="text-base font-bold text-gray-900 mt-2 leading-snug">{{ item.definition }}</p>
                   </div>
 
-                  <p class="text-base font-bold text-gray-900 mt-2 leading-snug">{{ item.definition }}</p>
+                  <div class="pt-3 border-t border-blue-200/60 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2.5">
+                      <button 
+                        v-if="currentMode === 'view'"
+                        @click.stop="openDictDetailModal(item.term)"
+                        class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
+                        <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 詳細辞書
+                      </button>
+                      <a 
+                        :href="getImageSearchUrl(item.term)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="text-[11px] text-indigo-700 hover:text-appleBlue hover:underline flex items-center gap-1 min-h-[36px] py-1 bg-white/80 px-2 rounded-lg border border-blue-200"
+                        title="Google画像検索を開く">
+                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                        <span>image</span>
+                      </a>
+                    </div>
+                    <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5">
+                      <i data-lucide="undo" class="w-3.5 h-3.5"></i> 戻す
+                    </span>
+                  </div>
                 </div>
 
-                <div class="pt-3 border-t border-blue-200/60 flex items-center justify-between text-xs">
-                  <button 
-                    v-if="currentMode === 'view'"
-                    @click.stop="openDictDetailModal(item.term)"
-                    class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
-                    <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 辞書詳細
-                  </button>
-                  <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5">
-                    <i data-lucide="undo" class="w-3.5 h-3.5"></i> 戻す
-                  </span>
-                </div>
               </div>
-
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </template>
+
+      <!-- ============================================== -->
+      <!-- VIEW B: すべての単語（横断一覧）タブ            -->
+      <!-- ============================================== -->
+      <template v-else-if="navigationTab === 'all_words'">
+        <section class="space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-appleCard p-4 rounded-2xl border border-appleSeparator/30 shadow-sm">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-gray-900 leading-tight">登録済み単語の横断一覧</h2>
+                <span class="text-xs bg-blue-50 text-appleBlue font-semibold px-2 py-0.5 rounded-full">
+                  {{ filteredAllWords.length }} / {{ items.length }} 語
+                </span>
+              </div>
+              <p class="text-[11px] text-appleSecondaryText mt-0.5">
+                <span v-if="currentMode === 'view'">全作品から登録された単語をまとめて確認・暗記できます</span>
+                <span v-else-if="currentMode === 'edit'" class="text-amber-600 font-bold">カードをタップして編集</span>
+                <span v-else-if="currentMode === 'delete'" class="text-red-600 font-bold">カードをタップして削除</span>
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- モード切替 -->
+              <div class="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+                <button 
+                  @click="currentMode = 'view'" 
+                  :class="currentMode === 'view' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'"
+                  class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i> 通常
+                </button>
+                <button 
+                  @click="currentMode = 'edit'" 
+                  :class="currentMode === 'edit' ? 'bg-amber-500 text-white shadow-xs' : 'text-gray-500 hover:text-amber-600'"
+                  class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                  <i data-lucide="pencil" class="w-3.5 h-3.5"></i> 編集
+                </button>
+                <button 
+                  @click="currentMode = 'delete'" 
+                  :class="currentMode === 'delete' ? 'bg-red-500 text-white shadow-xs' : 'text-gray-500 hover:text-red-600'"
+                  class="px-3 py-2 rounded-lg transition min-h-[38px] flex items-center gap-1">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 削除
+                </button>
+              </div>
+
+              <!-- 作品フィルター -->
+              <select 
+                v-model="allWordsMangaFilter"
+                class="bg-appleBg border border-appleSeparator/40 text-xs font-semibold rounded-xl px-3 py-2 min-h-[44px] text-gray-700 focus:ring-2 focus:ring-appleBlue/50 outline-none">
+                <option value="">すべての作品</option>
+                <option v-for="m in mangaRecords" :key="m.id" :value="m.title">{{ m.title }}</option>
+              </select>
+
+              <!-- 横断検索バー -->
+              <div class="relative flex-1 sm:w-48">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-appleSecondaryText"></i>
+                <input 
+                  v-model="searchQuery" 
+                  type="text" 
+                  placeholder="全単語から検索..." 
+                  class="w-full pl-9 pr-3 py-2 bg-appleBg border border-appleSeparator/40 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div v-if="filteredAllWords.length === 0" class="flex flex-col items-center justify-center p-12 bg-appleCard rounded-2xl border border-dashed border-appleSeparator/60 text-center">
+            <i data-lucide="search-x" class="w-12 h-12 text-appleSecondaryText mb-3"></i>
+            <p class="text-sm font-medium text-gray-800">一致する単語がありません</p>
+            <p class="text-xs text-appleSecondaryText mt-1">検索条件を変更するか、右上の「単語を追加」から登録してください</p>
+          </div>
+
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div 
+              v-for="item in filteredAllWords" 
+              :key="'all_' + item.id" 
+              class="perspective-1000 min-h-[190px] cursor-pointer"
+              @mouseenter="prefetchDictDetail(item.term)"
+              @touchstart="prefetchDictDetail(item.term)"
+              @click="handleCardClick(item)">
+              
+              <div 
+                class="relative w-full h-full duration-500 transform-style-preserve-3d transition-transform rounded-2xl"
+                :class="{ 
+                  'rotate-y-180': flippedCards[item.id] && currentMode === 'view',
+                  'ring-2 ring-amber-400': currentMode === 'edit',
+                  'ring-2 ring-red-400': currentMode === 'delete'
+                }">
+                
+                <!-- 表面：英語（横断版：作品名バッジ付き） -->
+                <div class="absolute inset-0 w-full h-full bg-appleCard p-5 rounded-2xl border border-appleSeparator/30 shadow-sm backface-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full">英語</span>
+                        <!-- どの作品の単語かを示すバッジ -->
+                        <span class="text-[10px] font-semibold text-gray-700 bg-gray-100 border border-appleSeparator/30 px-2 py-0.5 rounded-full truncate max-w-[120px]" :title="item.mangaTitle">
+                          📖 {{ item.mangaTitle }}
+                        </span>
+                      </div>
+                      
+                      <div class="flex items-center gap-1">
+                        <!-- 高精度発話ボタン (表面) -->
+                        <button 
+                          @click.stop="speakWord(item.term, item.id)"
+                          class="min-h-[36px] min-w-[36px] p-1.5 rounded-full text-gray-600 hover:text-appleBlue hover:bg-blue-50 active:scale-90 transition flex items-center justify-center"
+                          :class="{ 'text-appleBlue bg-blue-100/70 animate-pulse': playingWordId === item.id }"
+                          title="発音を聞く"
+                          aria-label="発音を聞く">
+                          <i :data-lucide="playingWordId === item.id ? 'volume-2' : 'volume-1'" class="w-4 h-4"></i>
+                        </button>
+
+                        <span v-if="currentMode === 'edit'" class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <i data-lucide="pencil" class="w-3 h-3"></i> 編集
+                        </span>
+                        <span v-else-if="currentMode === 'delete'" class="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                          <i data-lucide="trash-2" class="w-3 h-3"></i> 削除
+                        </span>
+                      </div>
+                    </div>
+
+                    <h3 class="text-xl font-bold text-gray-900 tracking-wide mt-1">{{ item.term }}</h3>
+                    
+                    <div class="flex items-center gap-2 mt-1.5" v-if="item.phonetic || item.partOfSpeech">
+                      <span v-if="item.phonetic" class="text-xs text-appleSecondaryText font-mono">/{{ item.phonetic }}/</span>
+                      <span v-if="item.partOfSpeech" class="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-medium">
+                        {{ formatPartOfSpeech(item.partOfSpeech) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="pt-3 border-t border-appleSeparator/20 flex items-center justify-between text-xs text-appleSecondaryText">
+                    <div v-if="currentMode === 'view'" class="flex items-center gap-2.5">
+                      <button 
+                        @click.stop="openDictDetailModal(item.term)"
+                        class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
+                        <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 詳細辞書
+                      </button>
+                      <a 
+                        :href="getImageSearchUrl(item.term)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="text-[11px] text-gray-600 hover:text-appleBlue hover:underline flex items-center gap-1 min-h-[36px] py-1 bg-gray-50 px-2 rounded-lg border border-appleSeparator/30"
+                        title="Google画像検索を開く">
+                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                        <span>image</span>
+                      </a>
+                    </div>
+                    <span v-else class="text-[11px] text-gray-400">選択待機中</span>
+
+                    <span v-if="currentMode === 'view'" class="text-[11px] flex items-center gap-0.5">
+                      <i data-lucide="touch-3" class="w-3.5 h-3.5"></i> 反転
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 裏面：日本語訳（横断版） -->
+                <div class="absolute inset-0 w-full h-full bg-blue-50/90 p-5 rounded-2xl border border-blue-200 shadow-sm backface-hidden rotate-y-180 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded-full">日本語訳</span>
+                        <span class="text-[10px] font-semibold text-gray-600 bg-white/70 px-2 py-0.5 rounded-full truncate max-w-[120px]">
+                          {{ item.mangaTitle }}
+                        </span>
+                      </div>
+                      
+                      <button 
+                        @click.stop="speakWord(item.term, item.id)"
+                        class="min-h-[36px] min-w-[36px] p-1.5 rounded-full text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 active:scale-90 transition flex items-center justify-center"
+                        :class="{ 'text-appleBlue bg-white animate-pulse shadow-xs': playingWordId === item.id }"
+                        title="英語の発音を聞く"
+                        aria-label="英語の発音を聞く">
+                        <i :data-lucide="playingWordId === item.id ? 'volume-2' : 'volume-1'" class="w-4 h-4"></i>
+                      </button>
+                    </div>
+
+                    <p class="text-base font-bold text-gray-900 mt-2 leading-snug">{{ item.definition }}</p>
+                  </div>
+
+                  <div class="pt-3 border-t border-blue-200/60 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2.5">
+                      <button 
+                        v-if="currentMode === 'view'"
+                        @click.stop="openDictDetailModal(item.term)"
+                        class="text-[11px] text-appleBlue hover:underline flex items-center gap-0.5 min-h-[36px] py-1">
+                        <i data-lucide="book-marked" class="w-3.5 h-3.5"></i> 詳細辞書
+                      </button>
+                      <a 
+                        :href="getImageSearchUrl(item.term)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        @click.stop
+                        class="text-[11px] text-indigo-700 hover:text-appleBlue hover:underline flex items-center gap-1 min-h-[36px] py-1 bg-white/80 px-2 rounded-lg border border-blue-200"
+                        title="Google画像検索を開く">
+                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                        <span>image</span>
+                      </a>
+                    </div>
+                    <span class="text-[11px] text-appleSecondaryText flex items-center gap-0.5">
+                      <i data-lucide="undo" class="w-3.5 h-3.5"></i> 戻す
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
 
     </main>
 
@@ -422,10 +680,14 @@
 
         <div class="p-5 space-y-4 overflow-y-auto">
           <div>
-            <label class="block text-xs font-semibold text-gray-700 mb-1">対象作品</label>
-            <div class="px-3 py-2.5 bg-gray-100 rounded-xl text-sm font-semibold text-gray-800 border border-appleSeparator/30">
-              {{ vocabForm.mangaTitle }}
-            </div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">対象作品 *</label>
+            <!-- 作品選択用セレクト（全単語タブからの登録にも対応） -->
+            <select 
+              v-model="vocabForm.mangaTitle"
+              class="w-full px-3 py-2.5 bg-gray-50 border border-appleSeparator/40 rounded-xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]">
+              <option value="" disabled>作品を選択してください</option>
+              <option v-for="m in mangaRecords" :key="m.id" :value="m.title">{{ m.title }}</option>
+            </select>
           </div>
 
           <div>
@@ -551,7 +813,7 @@
       </div>
     </div>
 
-    <!-- MODAL 3: Gemini API 詳細辞書モーダル -->
+    <!-- MODAL 3: 詳細辞書モーダル -->
     <div 
       v-if="isDictDetailOpen" 
       @click.self="closeDictDetailModal" 
@@ -561,7 +823,7 @@
         <div class="px-5 py-4 border-b border-appleSeparator/30 flex justify-between items-center bg-appleBg/50">
           <div class="flex items-center gap-2">
             <i data-lucide="book-marked" class="w-5 h-5 text-appleBlue"></i>
-            <h3 class="text-base font-bold text-gray-900">詳細辞書 (Gemini 3.5 Flash Lite)</h3>
+            <h3 class="text-base font-bold text-gray-900">詳細辞書</h3>
           </div>
           <button 
             @click="closeDictDetailModal" 
@@ -600,21 +862,35 @@
                 v-for="(meaning, mIdx) in dictDetailData.meanings" 
                 :key="mIdx" 
                 class="bg-gray-50/80 p-3.5 rounded-xl border border-appleSeparator/30">
-                <div class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-blue-100 text-appleBlue mb-2">
-                  {{ meaning.partOfSpeech }}
+                <div class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-appleBlue mb-2">
+                  {{ formatPartOfSpeech(meaning.partOfSpeech) }}
                 </div>
                 
-                <ul class="space-y-2.5 text-xs">
+                <ul class="space-y-3 text-xs">
                   <li 
                     v-for="(def, dIdx) in meaning.definitions" 
                     :key="dIdx" 
-                    class="space-y-1">
+                    class="space-y-1.5">
                     <div class="text-gray-800 font-medium leading-relaxed">
                       <span class="text-appleSecondaryText font-bold mr-1">{{ dIdx + 1 }}.</span>
                       {{ def.definition }}
                     </div>
-                    <div v-if="def.example" class="text-appleSecondaryText italic bg-white p-2 rounded-lg border border-appleSeparator/20">
-                      "{{ def.example }}"
+                    <div v-if="def.example" class="bg-white p-2.5 rounded-lg border border-appleSeparator/20 space-y-1">
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="text-gray-900 font-medium italic">
+                          "{{ def.example }}"
+                        </div>
+                        <span 
+                          v-if="def.sentencePattern" 
+                          class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80" 
+                          :title="getSentencePatternLabel(def.sentencePattern)">
+                          <i data-lucide="layers" class="w-3 h-3 text-indigo-500"></i>
+                          <span>{{ getSentencePatternLabel(def.sentencePattern) }}</span>
+                        </span>
+                      </div>
+                      <div v-if="def.example_ja" class="text-[11px] text-appleSecondaryText leading-tight">
+                        訳: {{ def.example_ja }}
+                      </div>
                     </div>
                   </li>
                 </ul>
@@ -635,7 +911,7 @@
     </div>
 
     <footer class="mt-auto pt-6 pb-2 text-center">
-      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.5.0 • MangaVocab</span>
+      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.8.0 • MangaVocab</span>
     </footer>
 
   </div>
@@ -656,6 +932,19 @@
 
     let isIndexedDBSupported = true;
     let dbInstance = null;
+
+    const partOfSpeechMap = {
+      noun: '名詞',
+      verb: '動詞',
+      adjective: '形容詞',
+      adverb: '副詞',
+      preposition: '前置詞',
+      conjunction: '接続詞',
+      pronoun: '代名詞',
+      interjection: '感嘆詞',
+      idiom: '熟語・イディオム',
+      phrase: '成句・表現'
+    };
 
     function initStorage() {
       return new Promise((resolve) => {
@@ -696,6 +985,9 @@
 
     createApp({
       setup() {
+        const navigationTab = ref('manga'); // 'manga' or 'all_words'
+        const allWordsMangaFilter = ref(''); // 横断ビュー内の作品絞り込み
+
         const selectedManga = ref('');
         const items = ref([]);
         const mangaRecords = ref([]);
@@ -745,6 +1037,30 @@
           genre: 'action'
         });
 
+        const switchTab = (tab) => {
+          navigationTab.value = tab;
+          currentMode.value = 'view';
+          searchQuery.value = '';
+          refreshIcons();
+        };
+
+        const formatPartOfSpeech = (pos) => {
+          if (!pos) return '';
+          const lower = pos.toLowerCase().trim();
+          return partOfSpeechMap[lower] || pos;
+        };
+
+        const getSentencePatternLabel = (pattern) => {
+          if (!pattern) return '';
+          const p = String(pattern).trim().toLowerCase();
+          if (p === '1' || p.includes('1') || p === 'sv') return '第1文型 (SV)';
+          if (p === '2' || p.includes('2') || p === 'svc') return '第2文型 (SVC)';
+          if (p === '3' || p.includes('3') || p === 'svo') return '第3文型 (SVO)';
+          if (p === '4' || p.includes('4') || p === 'svoo') return '第4文型 (SVOO)';
+          if (p === '5' || p.includes('5') || p === 'svoc') return '第5文型 (SVOC)';
+          return `文型: ${pattern}`;
+        };
+
         const openSettingsModal = () => {
           tempApiKey.value = apiKey.value;
           isSettingsModalOpen.value = true;
@@ -770,7 +1086,11 @@
           }
         };
 
-        // 最適な英語音声を動的に抽出・選択
+        const getImageSearchUrl = (term) => {
+          const q = encodeURIComponent((term || '').trim());
+          return `https://www.google.com/search?tbm=isch&q=${q}`;
+        };
+
         let cachedVoice = null;
         const getBestEnglishVoice = () => {
           if (!('speechSynthesis' in window)) return null;
@@ -796,7 +1116,6 @@
           };
         }
 
-        // 高精度発話メソッド
         const speakWord = (term, id) => {
           if (!('speechSynthesis' in window)) {
             alert('お使いのブラウザは音声読み上げ機能に対応していません。');
@@ -1061,20 +1380,28 @@
             throw new Error('Gemini APIキーが設定されていません。ヘッダーの「API未設定」からキーを入力してください。');
           }
 
-          const prompt = `Analyze the English term or idiom "${term}" and provide dictionary information in pure JSON format without markdown ticks.
+          const prompt = `Analyze the English word/idiom "${term}".
+Provide dictionary information in pure JSON format without markdown ticks.
+Rules:
+1. "partOfSpeech" MUST BE in Japanese (e.g. "名詞", "動詞", "形容詞", "副詞", "熟語", etc., NOT in English).
+2. For each example sentence, provide its natural Japanese translation in "example_ja".
+3. For each example sentence, determine which of the 5 basic English sentence patterns it belongs to ("1", "2", "3", "4", or "5" where 1=SV, 2=SVC, 3=SVO, 4=SVOO, 5=SVOC) in "sentencePattern".
+
 Format:
 {
   "word": "${term}",
   "phonetic": "IPA phonetic notation or empty string",
-  "partOfSpeech": "primary part of speech in English like verb, noun, idiom, etc.",
+  "partOfSpeech": "主要な品詞 (日本語: 例: 名詞, 動詞, 形容詞, 熟語)",
   "definition_ja": "natural Japanese translation/definition suitable for manga reading",
   "meanings": [
     {
-      "partOfSpeech": "part of speech",
+      "partOfSpeech": "日本語の品詞",
       "definitions": [
         {
-          "definition": "English definition or Japanese meaning explanation",
-          "example": "example sentence using the term"
+          "definition": "日本語での詳しい意味・解説",
+          "example": "example sentence in English",
+          "example_ja": "例文の自然な日本語訳",
+          "sentencePattern": "1 or 2 or 3 or 4 or 5"
         }
       ]
     }
@@ -1108,6 +1435,17 @@ Format:
           const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleaned);
 
+          if (parsed.partOfSpeech) {
+            parsed.partOfSpeech = formatPartOfSpeech(parsed.partOfSpeech);
+          }
+          if (Array.isArray(parsed.meanings)) {
+            parsed.meanings.forEach(m => {
+              if (m.partOfSpeech) {
+                m.partOfSpeech = formatPartOfSpeech(m.partOfSpeech);
+              }
+            });
+          }
+
           dictCache.set(key, { success: true, data: parsed });
           await setPersistedDictCache(key, parsed);
 
@@ -1123,7 +1461,7 @@ Format:
             const result = await fetchOrGetCachedDict(query);
             if (result) {
               vocabForm.value.phonetic = result.phonetic || '';
-              vocabForm.value.partOfSpeech = result.partOfSpeech || '';
+              vocabForm.value.partOfSpeech = formatPartOfSpeech(result.partOfSpeech) || '';
               if (!vocabForm.value.definition) {
                 vocabForm.value.definition = result.definition_ja || '';
               }
@@ -1145,12 +1483,15 @@ Format:
         };
 
         const preloadVisibleDictDetails = () => {
-          if (!selectedManga.value || !apiKey.value) return;
-          const currentWords = items.value.filter(i => i.mangaTitle === selectedManga.value).slice(0, 10);
+          const targetWords = navigationTab.value === 'manga'
+            ? items.value.filter(i => i.mangaTitle === selectedManga.value).slice(0, 10)
+            : items.value.slice(0, 10);
+            
+          if (targetWords.length === 0 || !apiKey.value) return;
           
           const scheduleFetch = window.requestIdleCallback || ((cb) => setTimeout(cb, 200));
           scheduleFetch(() => {
-            currentWords.forEach((item, index) => {
+            targetWords.forEach((item, index) => {
               setTimeout(() => {
                 prefetchDictDetail(item.term);
               }, index * 300);
@@ -1224,14 +1565,22 @@ Format:
         };
 
         const openAddModal = () => {
+          if (mangaRecords.value.length === 0) {
+            alert('単語を登録する前に、まず作品を1つ以上登録してください。');
+            openMangaModal();
+            return;
+          }
+
           isEditing.value = false;
+          // 横断タブで開いた場合は既存の1作品目をデフォルト選択
+          const defaultManga = selectedManga.value || mangaRecords.value[0]?.title || '';
           vocabForm.value = {
             id: null,
             term: '',
             definition: '',
             phonetic: '',
             partOfSpeech: '',
-            mangaTitle: selectedManga.value,
+            mangaTitle: defaultManga,
             updatedAt: null
           };
           isModalOpen.value = true;
@@ -1277,6 +1626,10 @@ Format:
         };
 
         const saveVocab = async () => {
+          if (!vocabForm.value.mangaTitle) {
+            alert('対象作品を選択してください。');
+            return;
+          }
           if (!vocabForm.value.term.trim()) {
             alert('単語または熟語を入力してください。');
             return;
@@ -1290,7 +1643,7 @@ Format:
             ...vocabForm.value,
             term: vocabForm.value.term.trim(),
             definition: vocabForm.value.definition.trim(),
-            mangaTitle: selectedManga.value,
+            partOfSpeech: formatPartOfSpeech(vocabForm.value.partOfSpeech),
             updatedAt: Date.now()
           };
 
@@ -1322,12 +1675,23 @@ Format:
           return items.value.filter(i => i.mangaTitle === mangaTitle).length;
         };
 
+        // 作品個別用フィルター
         const filteredItems = computed(() => {
           if (!selectedManga.value) return [];
           return items.value.filter(item => {
             const matchManga = item.mangaTitle === selectedManga.value;
             const q = searchQuery.value.toLowerCase();
             return matchManga && (!q || item.term.toLowerCase().includes(q) || item.definition.toLowerCase().includes(q));
+          });
+        });
+
+        // 全作品横断用フィルター
+        const filteredAllWords = computed(() => {
+          return items.value.filter(item => {
+            const matchManga = !allWordsMangaFilter.value || item.mangaTitle === allWordsMangaFilter.value;
+            const q = searchQuery.value.toLowerCase();
+            const matchQuery = !q || item.term.toLowerCase().includes(q) || item.definition.toLowerCase().includes(q) || (item.mangaTitle && item.mangaTitle.toLowerCase().includes(q));
+            return matchManga && matchQuery;
           });
         });
 
@@ -1339,6 +1703,8 @@ Format:
         });
 
         return {
+          navigationTab,
+          allWordsMangaFilter,
           selectedManga,
           items,
           mangaRecords,
@@ -1361,10 +1727,15 @@ Format:
           isMangaModalOpen,
           newMangaForm,
           filteredItems,
+          filteredAllWords,
+          switchTab,
           openSettingsModal,
           closeSettingsModal,
           saveApiKey,
           clearApiKey,
+          getImageSearchUrl,
+          formatPartOfSpeech,
+          getSentencePatternLabel,
           selectManga,
           getGenreInfo,
           countByManga,
