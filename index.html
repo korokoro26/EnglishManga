@@ -472,7 +472,6 @@
                     <div class="flex items-center justify-between mb-2">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="text-[10px] font-bold text-appleBlue uppercase tracking-wider bg-blue-50 px-2 py-0.5 rounded-full">英語</span>
-                        <!-- どの作品の単語かを示すバッジ -->
                         <span class="text-[10px] font-semibold text-gray-700 bg-gray-100 border border-appleSeparator/30 px-2 py-0.5 rounded-full truncate max-w-[120px]" :title="item.mangaTitle">
                           📖 {{ item.mangaTitle }}
                         </span>
@@ -681,7 +680,6 @@
         <div class="p-5 space-y-4 overflow-y-auto">
           <div>
             <label class="block text-xs font-semibold text-gray-700 mb-1">対象作品 *</label>
-            <!-- 作品選択用セレクト（全単語タブからの登録にも対応） -->
             <select 
               v-model="vocabForm.mangaTitle"
               class="w-full px-3 py-2.5 bg-gray-50 border border-appleSeparator/40 rounded-xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-appleBlue/50 min-h-[44px]">
@@ -833,7 +831,7 @@
           </button>
         </div>
 
-        <div class="p-5 space-y-4 overflow-y-auto">
+        <div class="p-5 space-y-5 overflow-y-auto">
           <div v-if="isLoadingDictDetail" class="space-y-4 animate-skeleton">
             <div class="h-6 bg-gray-200 rounded w-1/3"></div>
             <div class="h-4 bg-gray-200 rounded w-1/2"></div>
@@ -849,14 +847,25 @@
             <p class="text-xs text-appleSecondaryText">{{ dictDetailError }}</p>
           </div>
 
-          <div v-else-if="dictDetailData" class="space-y-4">
-            <div class="pb-3 border-b border-appleSeparator/20">
-              <h4 class="text-2xl font-bold text-gray-900">{{ dictDetailData.word }}</h4>
-              <span v-if="dictDetailData.phonetic" class="text-sm text-appleSecondaryText font-mono">
-                {{ dictDetailData.phonetic }}
-              </span>
+          <div v-else-if="dictDetailData" class="space-y-5">
+            <!-- 単語・発音記号・発話 -->
+            <div class="pb-3 border-b border-appleSeparator/20 flex items-center justify-between">
+              <div>
+                <h4 class="text-2xl font-bold text-gray-900">{{ dictDetailData.word }}</h4>
+                <span v-if="dictDetailData.phonetic" class="text-sm text-appleSecondaryText font-mono">
+                  {{ dictDetailData.phonetic }}
+                </span>
+              </div>
+              <button 
+                @click="speakWord(dictDetailData.word, 'dict_modal')"
+                class="min-h-[40px] min-w-[40px] p-2 rounded-full text-gray-600 hover:text-appleBlue hover:bg-blue-50 active:scale-95 transition flex items-center justify-center"
+                :class="{ 'text-appleBlue bg-blue-100/70 animate-pulse': playingWordId === 'dict_modal' }"
+                title="発音を聞く">
+                <i :data-lucide="playingWordId === 'dict_modal' ? 'volume-2' : 'volume-1'" class="w-5 h-5"></i>
+              </button>
             </div>
 
+            <!-- 意味・例文・厳密文型判定 -->
             <div class="space-y-4">
               <div 
                 v-for="(meaning, mIdx) in dictDetailData.meanings" 
@@ -875,11 +884,14 @@
                       <span class="text-appleSecondaryText font-bold mr-1">{{ dIdx + 1 }}.</span>
                       {{ def.definition }}
                     </div>
-                    <div v-if="def.example" class="bg-white p-2.5 rounded-lg border border-appleSeparator/20 space-y-1">
+                    
+                    <!-- 例文エリア -->
+                    <div v-if="def.example" class="bg-white p-2.5 rounded-lg border border-appleSeparator/20 space-y-1.5">
                       <div class="flex items-start justify-between gap-2">
                         <div class="text-gray-900 font-medium italic">
                           "{{ def.example }}"
                         </div>
+                        <!-- 高精度文型バッジ -->
                         <span 
                           v-if="def.sentencePattern" 
                           class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80" 
@@ -888,14 +900,63 @@
                           <span>{{ getSentencePatternLabel(def.sentencePattern) }}</span>
                         </span>
                       </div>
+
                       <div v-if="def.example_ja" class="text-[11px] text-appleSecondaryText leading-tight">
                         訳: {{ def.example_ja }}
+                      </div>
+
+                      <!-- AI文型要素解説（文型の理由が分かるヒント） -->
+                      <div v-if="def.patternBreakdown" class="text-[10px] text-indigo-600/90 font-mono bg-indigo-50/50 px-2 py-0.5 rounded border border-indigo-100">
+                        構造: {{ def.patternBreakdown }}
                       </div>
                     </div>
                   </li>
                 </ul>
               </div>
             </div>
+
+            <!-- 新機能：類義語とニュアンスの違い -->
+            <div v-if="dictDetailData.synonyms && dictDetailData.synonyms.length > 0" class="pt-2 space-y-2">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-gray-800">
+                <i data-lucide="split" class="w-4 h-4 text-purple-600"></i>
+                <span>類義語・ニュアンスの違い</span>
+              </div>
+
+              <div class="grid grid-cols-1 gap-2">
+                <div 
+                  v-for="(syn, sIdx) in dictDetailData.synonyms" 
+                  :key="sIdx"
+                  class="bg-purple-50/50 p-3 rounded-xl border border-purple-100/80 flex flex-col justify-between gap-1.5">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-sm text-purple-950">{{ syn.word }}</span>
+                      <button 
+                        @click="speakWord(syn.word, 'syn_' + sIdx)"
+                        class="p-1 rounded-full text-purple-700 hover:bg-purple-100/70 transition"
+                        :class="{ 'text-appleBlue animate-pulse': playingWordId === 'syn_' + sIdx }"
+                        title="発音を聞く">
+                        <i :data-lucide="playingWordId === 'syn_' + sIdx ? 'volume-2' : 'volume-1'" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+
+                    <a 
+                      :href="getImageSearchUrl(syn.word)"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-[10px] text-purple-700 hover:text-appleBlue flex items-center gap-0.5 bg-white px-1.5 py-0.5 rounded border border-purple-200"
+                      title="Google画像検索を開く">
+                      <i data-lucide="image" class="w-3 h-3"></i>
+                      <span>image</span>
+                    </a>
+                  </div>
+
+                  <p class="text-xs text-gray-700 leading-snug">
+                    {{ syn.nuance_ja }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -911,7 +972,7 @@
     </div>
 
     <footer class="mt-auto pt-6 pb-2 text-center">
-      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.8.0 • MangaVocab</span>
+      <span class="text-[10px] text-gray-400 select-none tracking-widest uppercase">v2.9.0 • MangaVocab</span>
     </footer>
 
   </div>
@@ -985,8 +1046,8 @@
 
     createApp({
       setup() {
-        const navigationTab = ref('manga'); // 'manga' or 'all_words'
-        const allWordsMangaFilter = ref(''); // 横断ビュー内の作品絞り込み
+        const navigationTab = ref('manga');
+        const allWordsMangaFilter = ref('');
 
         const selectedManga = ref('');
         const items = ref([]);
@@ -1380,30 +1441,43 @@
             throw new Error('Gemini APIキーが設定されていません。ヘッダーの「API未設定」からキーを入力してください。');
           }
 
-          const prompt = `Analyze the English word/idiom "${term}".
-Provide dictionary information in pure JSON format without markdown ticks.
-Rules:
-1. "partOfSpeech" MUST BE in Japanese (e.g. "名詞", "動詞", "形容詞", "副詞", "熟語", etc., NOT in English).
-2. For each example sentence, provide its natural Japanese translation in "example_ja".
-3. For each example sentence, determine which of the 5 basic English sentence patterns it belongs to ("1", "2", "3", "4", or "5" where 1=SV, 2=SVC, 3=SVO, 4=SVOO, 5=SVOC) in "sentencePattern".
+          // 厳密な文法定義（5文型の厳密識別）および類義語とニュアンス差分を含めた強化プロンプト
+          const prompt = `You are an expert English linguist and lexicographer.
+Analyze the English term "${term}" and provide rich dictionary data.
 
+STRICT GRAMMAR RULES FOR 5 SENTENCE PATTERNS (第1〜第5文型):
+Do NOT classify prepositional phrases as O or C unless they are part of a phrasal verb.
+1. Pattern 1 (SV): Subject + Verb. May contain adverbials (M). E.g., "The bird sings in the tree" -> SV + M.
+2. Pattern 2 (SVC): Subject + Verb + Complement. Crucial test: Subject == Complement (S=C). E.g., "She looks happy", "He became a doctor".
+3. Pattern 3 (SVO): Subject + Verb + Object. Crucial test: Subject != Object (S≠O), direct action upon O. E.g., "He hit the ball", "She likes music".
+4. Pattern 4 (SVOO): Subject + Verb + Indirect Object + Direct Object. Crucial test: IO != DO, meaning "give IO DO". E.g., "He gave her a book".
+5. Pattern 5 (SVOC): Subject + Verb + Object + Complement. Crucial test: Object == Complement (O=C). E.g., "They named the baby Leo", "It made me sad".
+
+Output pure JSON only without markdown or code fences.
 Format:
 {
   "word": "${term}",
   "phonetic": "IPA phonetic notation or empty string",
-  "partOfSpeech": "主要な品詞 (日本語: 例: 名詞, 動詞, 形容詞, 熟語)",
-  "definition_ja": "natural Japanese translation/definition suitable for manga reading",
+  "partOfSpeech": "日本語の品詞 (例: 名詞, 動詞, 形容詞, 副詞, 熟語)",
+  "definition_ja": "漫画・日常読解に適した自然な日本語訳",
   "meanings": [
     {
       "partOfSpeech": "日本語の品詞",
       "definitions": [
         {
-          "definition": "日本語での詳しい意味・解説",
-          "example": "example sentence in English",
+          "definition": "詳しい日本語の意味・語義",
+          "example": "Natural English sentence demonstrating this term",
           "example_ja": "例文の自然な日本語訳",
-          "sentencePattern": "1 or 2 or 3 or 4 or 5"
+          "sentencePattern": "1 or 2 or 3 or 4 or 5",
+          "patternBreakdown": "文型要素の分解 (例: S[He] + V[hit] + O[the ball] + M[with a bat])"
         }
       ]
+    }
+  ],
+  "synonyms": [
+    {
+      "word": "類義語（英単語）",
+      "nuance_ja": "${term} とのニュアンスの違い・使い分け（日本語で明確に説明）"
     }
   ]
 }`;
@@ -1572,7 +1646,6 @@ Format:
           }
 
           isEditing.value = false;
-          // 横断タブで開いた場合は既存の1作品目をデフォルト選択
           const defaultManga = selectedManga.value || mangaRecords.value[0]?.title || '';
           vocabForm.value = {
             id: null,
@@ -1675,7 +1748,6 @@ Format:
           return items.value.filter(i => i.mangaTitle === mangaTitle).length;
         };
 
-        // 作品個別用フィルター
         const filteredItems = computed(() => {
           if (!selectedManga.value) return [];
           return items.value.filter(item => {
@@ -1685,7 +1757,6 @@ Format:
           });
         });
 
-        // 全作品横断用フィルター
         const filteredAllWords = computed(() => {
           return items.value.filter(item => {
             const matchManga = !allWordsMangaFilter.value || item.mangaTitle === allWordsMangaFilter.value;
